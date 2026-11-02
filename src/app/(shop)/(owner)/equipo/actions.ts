@@ -6,9 +6,11 @@ import { ShopError } from "@/server/errors";
 import { getShopContext } from "@/server/session";
 import { deactivateMember } from "@/server/shop";
 
-export async function addBarberAction(_prev: { message: string } | null, formData: FormData) {
+export type TeamState = { ok: boolean; message: string } | null;
+
+export async function addBarberAction(_prev: TeamState, formData: FormData): Promise<TeamState> {
   const ctx = await getShopContext();
-  if (!ctx) return { message: "Tu sesión venció. Entra de nuevo." };
+  if (!ctx) return { ok: false, message: "Tu sesión venció. Entra de nuevo." };
   try {
     await addBarberAccount(ctx, {
       displayName: String(formData.get("displayName") ?? ""),
@@ -17,11 +19,11 @@ export async function addBarberAction(_prev: { message: string } | null, formDat
       commissionPercent: Number(formData.get("commissionPercent")),
     });
   } catch (error) {
-    if (error instanceof ShopError) return { message: error.message };
+    if (error instanceof ShopError) return { ok: false, message: error.message };
     throw error;
   }
   revalidatePath("/equipo");
-  return { message: "Barbero creado. Entrégale la contraseña que acabas de escribir." };
+  return { ok: true, message: "Barbero creado. Entrégale el correo y la contraseña que acabas de escribir." };
 }
 
 export async function deactivateMemberAction(formData: FormData) {

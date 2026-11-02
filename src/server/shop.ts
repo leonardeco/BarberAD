@@ -39,6 +39,27 @@ export async function createService(
   }
 }
 
+export async function updateService(
+  ctx: ShopContext,
+  serviceId: string,
+  input: { name: string; durationMin: number; listPrice: number },
+) {
+  if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede editar servicios.");
+  const name = input.name.trim();
+  if (!name) throw new ShopError("Escribe el nombre del servicio.");
+  if (!Number.isInteger(input.durationMin) || input.durationMin < 1 || input.durationMin > 480) {
+    throw new ShopError("La duración debe estar entre 1 y 480 minutos.");
+  }
+  wholePesos(input.listPrice, "El precio");
+  const rows = await withShop(ctx, (tx) => tx`
+    update services
+    set name = ${name}, duration_min = ${input.durationMin}, list_price = ${input.listPrice}
+    where id = ${serviceId}::uuid and shop_id = ${ctx.shopId}::uuid
+    returning id
+  `);
+  if (!rows[0]) throw new ShopError("Ese servicio no existe.");
+}
+
 export async function deactivateService(ctx: ShopContext, serviceId: string) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede desactivar servicios.");
   await withShop(ctx, (tx) => tx`
@@ -167,7 +188,23 @@ export async function completeCheckout(
   }
 }
 
-export type TodayCheckout = CheckoutReceipt & { barberName: string };
+export type TodayCheckout = CheckoutReceipt & {
+  barberName: string;
+  memberId: string;
+  time: string;
+  listPrice: number;
+  discount: number;
+  discountReason: string;
+};
+
+export type BarberDay = {
+  memberId: string;
+  name: string;
+  cuts: number;
+  charged: number;
+  commission: number;
+  tips: number;
+};
 
 export async function listToday(ctx: ShopContext) {
   return withShop(ctx, async (tx) => {
@@ -180,24 +217,73 @@ export async function listToday(ctx: ShopContext) {
       select c.id, c.service_name as "serviceName", c.charged, c.tip,
              c.commission_amount as "commissionAmount",
              c.payment_method as "paymentMethod",
+             c.member_id as "memberId",
+             c.list_price as "listPrice",
+             c.discount,
+             c.discount_reason as "discountReason",
+             to_char(c.completed_at at time zone s.timezone, 'HH24:MI') as time,
              m.display_name as "barberName"
       from checkouts c
       join shop_members m on m.id = c.member_id
+      join shops s on s.id = c.shop_id
       where c.shop_id = ${ctx.shopId}::uuid and c.business_date = ${day}::date
       order by c.completed_at desc
     `;
-    const cash = checkouts
-      .filter((row) => row.paymentMethod === "cash")
-      .reduce((sum, row) => sum + row.charged + row.tip, 0);
-    const commission = checkouts.reduce((sum, row) => sum + row.commissionAmount, 0);
+    const byMethod = { cash: 0, transfer: 0, card: 0 };
+    const barbers = new Map<string, BarberDay>();
+    let charged = 0;
+    let tips = 0;
+    let commission = 0;
+    for (const row of checkouts) {
+      byMethod[row.paymentMethod] += row.charged + row.tip;
+      charged += row.charged;
+      tips += row.tip;
+      commission += row.commissionAmount;
+      const barber = barbers.get(row.memberId) ?? {
+        memberId: row.memberId,
+        name: row.barberName,
+        cuts: 0,
+        charged: 0,
+        commission: 0,
+        tips: 0,
+      };
+      barber.cuts += 1;
+      barber.charged += row.charged;
+      barber.commission += row.commissionAmount;
+      barber.tips += row.tip;
+      barbers.set(row.memberId, barber);
+    }
     return {
       day,
       drawerStatus: drawer[0]?.status ?? "open",
       checkouts,
-      expectedCash: cash,
+      expectedCash: byMethod.cash,
+      byMethod,
+      charged,
+      tips,
       commission,
+      averageTicket: checkouts.length ? Math.round(charged / checkouts.length) : 0,
+      discounts: checkouts.filter((row) => row.discount > 0).length,
+      barbers: [...barbers.values()].sort((a, b) => b.charged - a.charged),
     };
   });
+}
+
+export async function recentDrawers(ctx: ShopContext) {
+  if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede ver los cierres.");
+  return withShop(ctx, (tx) => tx<{
+    day: string;
+    expectedCash: number;
+    countedCash: number;
+  }[]>`
+    select business_date::text as day,
+           expected_cash as "expectedCash",
+           counted_cash as "countedCash"
+    from cash_drawers
+    where shop_id = ${ctx.shopId}::uuid and status = 'closed'
+    order by business_date desc
+    limit 7
+  `);
 }
 
 export async function visibleCheckoutIds(ctx: ShopContext) {

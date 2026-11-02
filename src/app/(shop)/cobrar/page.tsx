@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PageTitle } from "@/components/ui";
+import { Scissors } from "lucide-react";
+import { EmptyState, PageTitle, buttonClass } from "@/components/ui";
 import { getShopContext } from "@/server/session";
 import { listServices } from "@/server/shop";
 import { CheckoutForm } from "./checkout-form";
+
+export const metadata = { title: "Cobrar" };
 
 export default async function ChargePage() {
   const ctx = await getShopContext();
@@ -11,16 +14,23 @@ export default async function ChargePage() {
   const services = await listServices(ctx, true);
   return (
     <>
-      <PageTitle title="Cobrar" detail="Servicio, monto y pago." />
+      <PageTitle title="Cobrar" detail="Servicio, monto y pago. La comisión sale sola." />
       {services.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 p-6">
-          <p>{ctx.role === "owner" ? "Primero crea un servicio." : "Pídele al dueño que cargue los servicios."}</p>
+        <EmptyState
+          icon={<Scissors aria-hidden="true" size={22} strokeWidth={1.75} />}
+          title={ctx.role === "owner" ? "Primero arma tu carta" : "Aún no hay servicios"}
+          detail={
+            ctx.role === "owner"
+              ? "Agrega los cortes que ofreces con su precio y vuelve aquí."
+              : "Pídele al dueño que cargue los servicios."
+          }
+        >
           {ctx.role === "owner" ? (
-            <Link className="mt-4 inline-flex h-12 items-center text-[#D97706]" href="/servicios">
+            <Link className={buttonClass} href="/servicios">
               Ir a servicios
             </Link>
           ) : null}
-        </div>
+        </EmptyState>
       ) : (
         <CheckoutForm
           services={services.map((service) => ({
