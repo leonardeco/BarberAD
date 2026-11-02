@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeftRight, Banknote, CreditCard, Plus, Scissors } from "lucide-react";
+import { Guide } from "@/components/guide";
 import { RefreshToday } from "@/components/refresh-today";
 import { EmptyState, PageTitle, Stat, buttonClass, cardClass } from "@/components/ui";
 import { formatCop } from "@/server/money";
 import { getShopContext } from "@/server/session";
-import { listToday } from "@/server/shop";
+import { guideStatus, listToday } from "@/server/shop";
 
 export const metadata = { title: "Hoy" };
 
@@ -26,8 +27,8 @@ function longDay(day: string) {
 
 export default async function TodayPage() {
   const ctx = await getShopContext();
-  if (!ctx) redirect("/entrar");
-  const today = await listToday(ctx);
+  if (!ctx) redirect("/salir");
+  const [today, guide] = await Promise.all([listToday(ctx), guideStatus(ctx)]);
   const owner = ctx.role === "owner";
   const cuts = today.checkouts.length;
   const top = today.barbers[0]?.charged ?? 0;
@@ -47,6 +48,8 @@ export default async function TodayPage() {
           </div>
         }
       />
+
+      {guide && !guide.hidden ? <Guide done={guide.done} steps={guide.steps} /> : null}
 
       <section className={`${cardClass} relative overflow-hidden p-5`}>
         <div

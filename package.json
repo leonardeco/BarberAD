@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "tsx src/server/dev.ts",
     "db:migrate": "tsx src/server/migrate.ts",
-    "test": "tsx --test src/server/checkout.integration.test.ts",
+    "test": "tsx --test --test-force-exit src/server/checkout.integration.test.ts",
     "build": "next build",
     "start": "next start"
   },

@@ -18,7 +18,7 @@ function shortDay(day: string) {
 
 export default async function DrawerPage() {
   const ctx = await getShopContext();
-  if (!ctx) redirect("/entrar");
+  if (!ctx) redirect("/salir");
   const [today, history] = await Promise.all([listToday(ctx), recentDrawers(ctx)]);
   const closed = today.drawerStatus === "closed";
   const todayClose = closed ? history.find((row) => row.day === today.day) : undefined;

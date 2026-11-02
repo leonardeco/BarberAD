@@ -20,7 +20,7 @@ const templates = [
 
 export default async function ServicesPage() {
   const ctx = await getShopContext();
-  if (!ctx) redirect("/entrar");
+  if (!ctx) redirect("/salir");
   const services = await listServices(ctx, false);
   const taken = new Set(services.filter((item) => item.active).map((item) => item.name.toLowerCase()));
   const suggestions = templates.filter((item) => !taken.has(item.name.toLowerCase()));

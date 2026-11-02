@@ -107,6 +107,109 @@ export async function deactivateMember(ctx: ShopContext, memberId: string) {
   `);
 }
 
+export async function updateCommission(ctx: ShopContext, memberId: string, percent: number) {
+  if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede cambiar comisiones.");
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+    throw new ShopError("La comisión debe estar entre 0 y 100.");
+  }
+  const rows = await withShop(ctx, (tx) => tx`
+    update shop_members set commission_percent = ${percent}
+    where id = ${memberId}::uuid
+      and shop_id = ${ctx.shopId}::uuid
+      and role = 'barber'
+    returning id
+  `);
+  if (!rows[0]) throw new ShopError("Ese barbero no existe.");
+}
+
+export type ShopProfile = { name: string; phone: string; address: string };
+
+export async function shopProfile(ctx: ShopContext) {
+  const rows = await withShop(ctx, (tx) => tx<ShopProfile[]>`
+    select name, phone, address from shops where id = ${ctx.shopId}::uuid
+  `);
+  if (!rows[0]) throw new ShopError("No encontramos la barbería.");
+  return rows[0];
+}
+
+export async function updateShopProfile(ctx: ShopContext, input: ShopProfile) {
+  if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede editar la barbería.");
+  const name = input.name.trim();
+  const phone = input.phone.trim();
+  const address = input.address.trim();
+  if (!name) throw new ShopError("Escribe el nombre de la barbería.");
+  if (phone && !/^[0-9+\s()-]{7,20}$/.test(phone)) {
+    throw new ShopError("Escribe un teléfono válido, solo números.");
+  }
+  if (address.length > 160) throw new ShopError("La dirección es demasiado larga.");
+  await withShop(ctx, (tx) => tx`
+    update shops set name = ${name}, phone = ${phone}, address = ${address}
+    where id = ${ctx.shopId}::uuid
+  `);
+}
+
+export async function setGuideHidden(ctx: ShopContext, hidden: boolean) {
+  if (ctx.role !== "owner") return;
+  await withShop(ctx, (tx) => tx`
+    update shops set guide_hidden = ${hidden} where id = ${ctx.shopId}::uuid
+  `);
+}
+
+export type GuideStep = { id: string; title: string; detail: string; href: string; done: boolean };
+
+export async function guideStatus(ctx: ShopContext) {
+  if (ctx.role !== "owner") return null;
+  const rows = await withShop(ctx, (tx) => tx<{
+    phone: string;
+    address: string;
+    guide_hidden: boolean;
+    services: number;
+    barbers: number;
+    charged: boolean;
+  }[]>`
+    select s.phone, s.address, s.guide_hidden,
+           (select count(*)::int from services where shop_id = s.id and active) as services,
+           (select count(*)::int from shop_members where shop_id = s.id and role = 'barber') as barbers,
+           exists (select 1 from checkouts where shop_id = s.id) as charged
+    from shops s
+    where s.id = ${ctx.shopId}::uuid
+  `);
+  const row = rows[0];
+  if (!row) return null;
+  const steps: GuideStep[] = [
+    {
+      id: "services",
+      title: "Arma tu carta",
+      detail: "Agrega los cortes que ofreces con su precio.",
+      href: "/servicios",
+      done: row.services > 0,
+    },
+    {
+      id: "charge",
+      title: "Cobra tu primer corte",
+      detail: "Tres toques: servicio, monto y pago.",
+      href: "/cobrar",
+      done: row.charged,
+    },
+    {
+      id: "team",
+      title: "Suma a tu equipo",
+      detail: "Cada barbero entra con su correo. Si trabajas solo, sáltalo.",
+      href: "/equipo",
+      done: row.barbers > 0,
+    },
+    {
+      id: "profile",
+      title: "Completa los datos de la barbería",
+      detail: "Teléfono y dirección, para tus clientes.",
+      href: "/cuenta",
+      done: row.phone.length > 0 && row.address.length > 0,
+    },
+  ];
+  const done = steps.filter((step) => step.done).length;
+  return { steps, done, hidden: row.guide_hidden || done === steps.length };
+}
+
 const methods = new Set<PaymentMethod>(["cash", "transfer", "card"]);
 
 async function businessDate(tx: ShopTx, ctx: ShopContext) {

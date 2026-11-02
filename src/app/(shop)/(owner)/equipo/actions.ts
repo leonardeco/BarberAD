@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { addBarberAccount } from "@/server/auth";
+import { addBarberAccount, resetMemberPassword } from "@/server/auth";
 import { ShopError } from "@/server/errors";
 import { getShopContext } from "@/server/session";
-import { deactivateMember } from "@/server/shop";
+import { deactivateMember, updateCommission } from "@/server/shop";
 
 export type TeamState = { ok: boolean; message: string } | null;
 
@@ -24,6 +24,31 @@ export async function addBarberAction(_prev: TeamState, formData: FormData): Pro
   }
   revalidatePath("/equipo");
   return { ok: true, message: "Barbero creado. Entrégale el correo y la contraseña que acabas de escribir." };
+}
+
+export async function updateCommissionAction(_prev: TeamState, formData: FormData): Promise<TeamState> {
+  const ctx = await getShopContext();
+  if (!ctx) return { ok: false, message: "Tu sesión venció. Entra de nuevo." };
+  try {
+    await updateCommission(ctx, String(formData.get("memberId") ?? ""), Number(formData.get("commissionPercent")));
+  } catch (error) {
+    if (error instanceof ShopError) return { ok: false, message: error.message };
+    throw error;
+  }
+  revalidatePath("/equipo");
+  return { ok: true, message: "Comisión actualizada. Aplica desde el próximo cobro." };
+}
+
+export async function resetPasswordAction(_prev: TeamState, formData: FormData): Promise<TeamState> {
+  const ctx = await getShopContext();
+  if (!ctx) return { ok: false, message: "Tu sesión venció. Entra de nuevo." };
+  try {
+    await resetMemberPassword(ctx, String(formData.get("memberId") ?? ""), String(formData.get("password") ?? ""));
+  } catch (error) {
+    if (error instanceof ShopError) return { ok: false, message: error.message };
+    throw error;
+  }
+  return { ok: true, message: "Contraseña cambiada. El barbero debe entrar de nuevo con la nueva." };
 }
 
 export async function deactivateMemberAction(formData: FormData) {

@@ -10,7 +10,7 @@ export const metadata = { title: "Cobrar" };
 
 export default async function ChargePage() {
   const ctx = await getShopContext();
-  if (!ctx) redirect("/entrar");
+  if (!ctx) redirect("/salir");
   const services = await listServices(ctx, true);
   return (
     <>

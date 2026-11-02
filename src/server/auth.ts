@@ -122,6 +122,74 @@ export async function deleteSession(hash: string) {
   await appDb()`select app_delete_session(${hash})`;
 }
 
+export async function changePassword(
+  ctx: ShopContext,
+  input: { current: string; next: string; keepSessionHash: string },
+) {
+  requirePassword(input.next);
+  const rows = await appDb()<{ app_password_hash_for_user: string | null }[]>`
+    select app_password_hash_for_user(${ctx.userId}::uuid)
+  `;
+  const stored = rows[0]?.app_password_hash_for_user;
+  if (!stored || !(await verifyPassword(input.current, stored))) {
+    throw new ShopError("La contraseña actual no coincide.");
+  }
+  await appDb()`
+    select app_change_password(${ctx.userId}::uuid, ${await hashPassword(input.next)}, ${input.keepSessionHash})
+  `;
+}
+
+export async function createPasswordReset(email: string, hash: string) {
+  const rows = await appDb()<{ app_create_password_reset: boolean }[]>`
+    select app_create_password_reset(${normalizeEmail(email)}, ${hash})
+  `;
+  return rows[0]?.app_create_password_reset ?? false;
+}
+
+export async function resetTokenIsValid(hash: string) {
+  const rows = await appDb()<{ app_reset_token_is_valid: boolean }[]>`
+    select app_reset_token_is_valid(${hash})
+  `;
+  return rows[0]?.app_reset_token_is_valid ?? false;
+}
+
+export async function consumePasswordReset(hash: string, password: string) {
+  requirePassword(password);
+  const rows = await appDb()<{ app_consume_password_reset: boolean }[]>`
+    select app_consume_password_reset(${hash}, ${await hashPassword(password)})
+  `;
+  if (!rows[0]?.app_consume_password_reset) {
+    throw new ShopError("El enlace venció o ya se usó. Pide uno nuevo.");
+  }
+}
+
+export async function resetMemberPassword(ctx: ShopContext, memberId: string, password: string) {
+  if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede cambiar contraseñas del equipo.");
+  requirePassword(password);
+  try {
+    await appDb()`
+      select app_reset_member_password(
+        ${ctx.userId}::uuid,
+        ${ctx.shopId}::uuid,
+        ${memberId}::uuid,
+        ${await hashPassword(password)}
+      )
+    `;
+  } catch (error) {
+    const message = messageFromDatabase(error);
+    if (message) throw new ShopError(message);
+    throw error;
+  }
+}
+
+export async function memberEmails(ctx: ShopContext) {
+  if (ctx.role !== "owner") return new Map<string, string>();
+  const rows = await appDb()<{ member_id: string; email: string }[]>`
+    select * from app_member_emails(${ctx.userId}::uuid, ${ctx.shopId}::uuid)
+  `;
+  return new Map(rows.map((row) => [row.member_id, row.email]));
+}
+
 export async function authenticate(email: string, password: string) {
   const rows = await appDb()<{ user_id: string; password_hash: string }[]>`
     select * from app_find_user_by_email(${normalizeEmail(email)})

@@ -1,16 +1,11 @@
-import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { contextForUser, createSession, deleteSession, readSessionUser } from "./auth";
-import { required } from "./env";
+import { newToken, tokenHash } from "./token";
 
 const cookieName = "barberad_session";
 
-function tokenHash(token: string) {
-  return createHash("sha256").update(`${required("SESSION_SECRET")}:${token}`).digest("hex");
-}
-
 async function attachSession(userId: string) {
-  const token = randomBytes(32).toString("base64url");
+  const token = newToken();
   await createSession(userId, tokenHash(token));
   const jar = await cookies();
   jar.set(cookieName, token, {
@@ -26,11 +21,16 @@ export async function startSession(userId: string) {
   await attachSession(userId);
 }
 
-export async function getShopContext() {
+export async function currentSessionHash() {
   const jar = await cookies();
   const token = jar.get(cookieName)?.value;
-  if (!token) return null;
-  const userId = await readSessionUser(tokenHash(token));
+  return token ? tokenHash(token) : null;
+}
+
+export async function getShopContext() {
+  const hash = await currentSessionHash();
+  if (!hash) return null;
+  const userId = await readSessionUser(hash);
   if (!userId) return null;
   return contextForUser(userId);
 }

@@ -28,18 +28,23 @@ async function ensureRole(sql: ReturnType<typeof postgres>) {
 export async function migrate(database: "barberad" | "barberad_test", options?: { fresh?: boolean }) {
   await ensureLocalPostgres();
   await createDatabase(database);
-  const sql = postgres(adminUrl(database), { max: 1 });
+  const sql = postgres(adminUrl(database), { max: 1, onnotice: () => undefined });
   try {
     await ensureRole(sql);
     if (options?.fresh) {
       await sql.unsafe("drop schema if exists public cascade; create schema public;");
     }
     await sql.unsafe("create table if not exists schema_migrations (id text primary key)");
-    const done = await sql`select 1 from schema_migrations where id = '0001'`;
-    if (done.length === 0) {
-      const file = fs.readFileSync(path.join(process.cwd(), "db", "migrations", "0001_init.sql"), "utf8");
-      await sql.unsafe(file);
-      await sql`insert into schema_migrations (id) values ('0001')`;
+    const dir = path.join(process.cwd(), "db", "migrations");
+    const files = fs.readdirSync(dir).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort();
+    for (const name of files) {
+      const id = name.slice(0, 4);
+      const done = await sql`select 1 from schema_migrations where id = ${id}`;
+      if (done.length > 0) continue;
+      await sql.begin(async (tx) => {
+        await tx.unsafe(fs.readFileSync(path.join(dir, name), "utf8"));
+        await tx`insert into schema_migrations (id) values (${id})`;
+      });
     }
     await sql.unsafe(`grant connect on database ${database} to barberad_app`);
     await sql.unsafe("grant usage on schema public to barberad_app");
