@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80">
+  <defs>
+    <clipPath id="pole">
+      <rect x="33" y="21" width="14" height="38" rx="7" />
+    </clipPath>
+  </defs>
+  <rect width="320" height="80" rx="20" fill="#0F172A" />
+  <rect x="29" y="17" width="22" height="46" rx="11" fill="#D97706" />
+  <rect x="33" y="21" width="14" height="38" rx="7" fill="#0F172A" />
+  <g clip-path="url(#pole)" fill="#D97706">
+    <path d="M28 29 52 17v7L28 36z" />
+    <path d="M28 43 52 31v7L28 50z" />
+    <path d="M28 57 52 45v7L28 64z" />
+  </g>
+  <text x="76" y="52" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5">
+    <tspan fill="#F8FAFC">Barber</tspan><tspan fill="#D97706">AD</tspan>
+  </text>
+</svg>
