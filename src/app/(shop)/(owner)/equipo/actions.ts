@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { addBarberAccount, resetMemberPassword } from "@/server/auth";
 import { ShopError } from "@/server/errors";
+import { readInt } from "@/server/money";
 import { getShopContext } from "@/server/session";
 import { deactivateMember, updateCommission } from "@/server/shop";
 
@@ -16,7 +17,7 @@ export async function addBarberAction(_prev: TeamState, formData: FormData): Pro
       displayName: String(formData.get("displayName") ?? ""),
       email: String(formData.get("email") ?? ""),
       password: String(formData.get("password") ?? ""),
-      commissionPercent: Number(formData.get("commissionPercent")),
+      commissionPercent: readInt(formData.get("commissionPercent")),
     });
   } catch (error) {
     if (error instanceof ShopError) return { ok: false, message: error.message };
@@ -30,7 +31,7 @@ export async function updateCommissionAction(_prev: TeamState, formData: FormDat
   const ctx = await getShopContext();
   if (!ctx) return { ok: false, message: "Tu sesión venció. Entra de nuevo." };
   try {
-    await updateCommission(ctx, String(formData.get("memberId") ?? ""), Number(formData.get("commissionPercent")));
+    await updateCommission(ctx, String(formData.get("memberId") ?? ""), readInt(formData.get("commissionPercent")));
   } catch (error) {
     if (error instanceof ShopError) return { ok: false, message: error.message };
     throw error;

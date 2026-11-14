@@ -1,7 +1,8 @@
 import { withShop, type ShopTx } from "./db";
 import { ShopError, messageFromDatabase } from "./errors";
-import { commissionAmount, deriveMoney, wholePesos } from "./money";
+import { MAX_DRAWER_PESOS, commissionAmount, deriveMoney, wholePesos } from "./money";
 import type { CheckoutReceipt, PaymentMethod, ShopContext } from "./types";
+import { checkCommission, checkDuration, cleanName } from "./validation";
 
 function guard(error: unknown): never {
   if (error instanceof ShopError) throw error;
@@ -23,11 +24,8 @@ export async function createService(
   input: { name: string; durationMin: number; listPrice: number },
 ) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede crear servicios.");
-  const name = input.name.trim();
-  if (!name) throw new ShopError("Escribe el nombre del servicio.");
-  if (!Number.isInteger(input.durationMin) || input.durationMin < 1 || input.durationMin > 480) {
-    throw new ShopError("La duración debe estar entre 1 y 480 minutos.");
-  }
+  const name = cleanName(input.name, "el nombre del servicio");
+  checkDuration(input.durationMin);
   wholePesos(input.listPrice, "El precio");
   try {
     await withShop(ctx, (tx) => tx`
@@ -45,11 +43,8 @@ export async function updateService(
   input: { name: string; durationMin: number; listPrice: number },
 ) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede editar servicios.");
-  const name = input.name.trim();
-  if (!name) throw new ShopError("Escribe el nombre del servicio.");
-  if (!Number.isInteger(input.durationMin) || input.durationMin < 1 || input.durationMin > 480) {
-    throw new ShopError("La duración debe estar entre 1 y 480 minutos.");
-  }
+  const name = cleanName(input.name, "el nombre del servicio");
+  checkDuration(input.durationMin);
   wholePesos(input.listPrice, "El precio");
   const rows = await withShop(ctx, (tx) => tx`
     update services
@@ -109,9 +104,7 @@ export async function deactivateMember(ctx: ShopContext, memberId: string) {
 
 export async function updateCommission(ctx: ShopContext, memberId: string, percent: number) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede cambiar comisiones.");
-  if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
-    throw new ShopError("La comisión debe estar entre 0 y 100.");
-  }
+  checkCommission(percent);
   const rows = await withShop(ctx, (tx) => tx`
     update shop_members set commission_percent = ${percent}
     where id = ${memberId}::uuid
@@ -134,10 +127,9 @@ export async function shopProfile(ctx: ShopContext) {
 
 export async function updateShopProfile(ctx: ShopContext, input: ShopProfile) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede editar la barbería.");
-  const name = input.name.trim();
+  const name = cleanName(input.name, "el nombre de la barbería");
   const phone = input.phone.trim();
   const address = input.address.trim();
-  if (!name) throw new ShopError("Escribe el nombre de la barbería.");
   if (phone && !/^[0-9+\s()-]{7,20}$/.test(phone)) {
     throw new ShopError("Escribe un teléfono válido, solo números.");
   }
@@ -294,6 +286,7 @@ export async function completeCheckout(
 export type TodayCheckout = CheckoutReceipt & {
   barberName: string;
   memberId: string;
+  isOwner: boolean;
   time: string;
   listPrice: number;
   discount: number;
@@ -303,6 +296,7 @@ export type TodayCheckout = CheckoutReceipt & {
 export type BarberDay = {
   memberId: string;
   name: string;
+  isOwner: boolean;
   cuts: number;
   charged: number;
   commission: number;
@@ -325,7 +319,8 @@ export async function listToday(ctx: ShopContext) {
              c.discount,
              c.discount_reason as "discountReason",
              to_char(c.completed_at at time zone s.timezone, 'HH24:MI') as time,
-             m.display_name as "barberName"
+             m.display_name as "barberName",
+             (m.role = 'owner') as "isOwner"
       from checkouts c
       join shop_members m on m.id = c.member_id
       join shops s on s.id = c.shop_id
@@ -341,10 +336,12 @@ export async function listToday(ctx: ShopContext) {
       byMethod[row.paymentMethod] += row.charged + row.tip;
       charged += row.charged;
       tips += row.tip;
-      commission += row.commissionAmount;
+      // Lo que el dueño cobra con sus propias manos no es una comisión que se le deba al equipo.
+      if (!row.isOwner) commission += row.commissionAmount;
       const barber = barbers.get(row.memberId) ?? {
         memberId: row.memberId,
         name: row.barberName,
+        isOwner: row.isOwner,
         cuts: 0,
         charged: 0,
         commission: 0,
@@ -395,16 +392,25 @@ export async function visibleCheckoutIds(ctx: ShopContext) {
 
 export async function closeDrawer(ctx: ShopContext, countedCash: number) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede cerrar la caja.");
-  wholePesos(countedCash, "El efectivo contado");
+  wholePesos(countedCash, "El efectivo contado", MAX_DRAWER_PESOS);
   try {
     return await withShop(ctx, async (tx) => {
       const day = await businessDate(tx, ctx);
-      const today = await listInside(tx, ctx, day);
       await tx`
         insert into cash_drawers (shop_id, business_date, status)
         values (${ctx.shopId}::uuid, ${day}::date, 'open')
         on conflict (shop_id, business_date) do nothing
       `;
+      // Se bloquea la caja del día ANTES de sumar. Un cobro que entre a la vez espera
+      // aquí (su trigger pide el mismo candado): o queda dentro de la suma, o se rechaza
+      // por caja cerrada. Nunca queda un cobro en efectivo fuera del esperado.
+      const locked = await tx<{ status: string }[]>`
+        select status from cash_drawers
+        where shop_id = ${ctx.shopId}::uuid and business_date = ${day}::date
+        for update
+      `;
+      if (locked[0]?.status === "closed") throw new ShopError("La caja de hoy ya está cerrada.");
+      const today = await listInside(tx, ctx, day);
       const rows = await tx<{ status: string }[]>`
         update cash_drawers
         set status = 'closed',

@@ -65,21 +65,28 @@ export function CheckoutForm({ services }: { services: Service[] }) {
   async function confirm() {
     setPending(true);
     setMessage("");
-    const result = await chargeAction({
-      serviceId: service.id,
-      amount: parsedAmount,
-      reason,
-      tip: tip === "" ? 0 : Number(tip),
-      paymentMethod: method,
-      clientKey,
-    });
-    setPending(false);
-    if (!result.ok) {
-      setMessage(result.message);
-      return;
+    try {
+      const result = await chargeAction({
+        serviceId: service.id,
+        amount: parsedAmount,
+        reason,
+        tip: tip === "" ? 0 : Number(tip),
+        paymentMethod: method,
+        clientKey,
+      });
+      if (!result.ok) {
+        setMessage(result.message);
+        return;
+      }
+      setReceipt(result.receipt);
+      router.refresh();
+    } catch {
+      // Sin señal el celular no llega al servidor. La misma clave de cobro se reenvía al
+      // reintentar, así que si el primer intento sí llegó no se cobra dos veces.
+      setMessage("No hay conexión con el servidor. Revisa la señal y toca Confirmar cobro otra vez: no se cobra dos veces.");
+    } finally {
+      setPending(false);
     }
-    setReceipt(result.receipt);
-    router.refresh();
   }
 
   if (receipt) {
@@ -170,6 +177,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
               autoFocus
               className={`${inputClass} h-14 text-2xl font-semibold tabular-nums`}
               inputMode="numeric"
+              maxLength={8}
               onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))}
               value={amount}
             />
@@ -185,6 +193,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
               </span>
               <input
                 className={inputClass}
+                maxLength={120}
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="Ej.: cliente frecuente"
                 value={reason}
@@ -247,6 +256,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
               aria-label="Otra propina"
               className={`${inputClass} mt-2 tabular-nums`}
               inputMode="numeric"
+              maxLength={8}
               onChange={(event) => setTip(event.target.value.replace(/\D/g, ""))}
               placeholder="Otro valor"
               value={tipOptions.includes(Number(tip)) ? "" : tip}

@@ -119,7 +119,8 @@ export default async function TodayPage() {
                   />
                 </div>
                 <p className="mt-2 text-sm text-[#CBD5E1]">
-                  {barber.cuts === 1 ? "1 corte" : `${barber.cuts} cortes`} · comisión {formatCop(barber.commission)}
+                  {barber.cuts === 1 ? "1 corte" : `${barber.cuts} cortes`}
+                  {barber.isOwner ? "" : ` · comisión ${formatCop(barber.commission)}`}
                   {barber.tips ? ` · propinas ${formatCop(barber.tips)}` : ""}
                 </p>
               </li>
@@ -166,7 +167,9 @@ export default async function TodayPage() {
                         Descuento de {formatCop(cut.discount)} sobre {formatCop(cut.listPrice)}: {cut.discountReason}
                       </p>
                     ) : null}
-                    <p className="mt-1 text-xs text-[#94A3B8]">Comisión {formatCop(cut.commissionAmount)}</p>
+                    {cut.isOwner ? null : (
+                      <p className="mt-1 text-xs text-[#94A3B8]">Comisión {formatCop(cut.commissionAmount)}</p>
+                    )}
                   </div>
                 </li>
               );

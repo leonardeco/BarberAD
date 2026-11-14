@@ -83,18 +83,42 @@ Todavía no hay proveedor de correo. En local, el enlace para recuperar la contr
 | Comando | Qué hace |
 | --- | --- |
 | `npm run dev` | Migra y abre el servidor en el puerto 3000. |
-| `npm test` | Comprueba que una barbería no vea ni edite lo de otra, que un cobro no se pueda cambiar y que los enlaces de recuperación sirvan una sola vez. Usa la base `barberad_test`. |
+| `npm test` | Comprueba que una barbería no vea ni edite lo de otra, que un cobro no se pueda cambiar, que los enlaces de recuperación sirvan una sola vez, que la caja cuente un cobro que entra mientras se cierra y los topes de los montos. Usa la base `barberad_test`. |
+| `npm run typecheck` | Revisa los tipos de todo el proyecto, pruebas incluidas. |
 | `npm run db:migrate` | Aplica las migraciones pendientes sobre `barberad`. |
 | `npm run build` | Compila. |
 | `npm start` | Sirve la compilación. No enciende Postgres: para trabajar, usa `npm run dev`. |
 
 Las migraciones viven en `db/migrations/` y se aplican en orden. Cada una corre una sola vez.
 
+### Si no arranca Postgres
+
+El Postgres embebido no corre como `root` (es lo normal dentro de un contenedor o un CI): usa un usuario sin privilegios. Además `initdb` pide el locale `en_US.UTF-8`; en una imagen mínima se crea con `localedef -i en_US -f UTF-8 en_US.UTF-8`.
+
+## Límites
+
+Un cobro, un precio o una propina pueden llegar hasta $10.000.000; el efectivo contado al cerrar, hasta $1.000.000.000. Los nombres, hasta 80 caracteres; el motivo de un descuento, hasta 120; la contraseña, entre 8 y 200.
+
+## Antes de publicar
+
+Lo que hoy impide poner la app en un servidor:
+
+- **Base de datos.** La app solo se conecta a un Postgres local (`127.0.0.1`, bases `barberad` y `barberad_test`). Falta leer una `DATABASE_URL` y apuntar a un Postgres administrado.
+- **Secretos.** `.env.example` se lee como valores por defecto, incluido `SESSION_SECRET`. En producción debe fallar si no se define uno propio.
+- **Correo.** Sin proveedor de correo, recuperar la contraseña no funciona en producción (el enlace solo sale en la consola).
+- **Intentos de entrada.** No hay límite de intentos en entrar ni en pedir enlaces de recuperación.
+- **Copias de seguridad** y monitoreo de errores.
+
 ## Lo que sigue
 
+- **Anular un cobro.** Un cobro mal cargado (valor, servicio o método) hoy no tiene arreglo desde la app. Hace falta una anulación del dueño, con motivo, que quede registrada sin tocar el cobro original.
+- **Reabrir o cobrar tarde.** Cerrada la caja, ese día no admite más cobros hasta la medianoche. Un cliente que llega después del cierre no se puede cobrar.
+- **Historial.** Hoy solo muestra el día en curso. Faltan los días anteriores, la semana y el mes, y poder bajarlo a una hoja de cálculo.
+- **Reactivar a un barbero** desactivado. Su correo queda ocupado y no se puede volver a registrar.
+- **Cobrar sin señal.** Si se va la señal, el cobro no se guarda. La clave del cobro ya permite reintentar sin duplicar; falta guardarlo en el celular y enviarlo al volver.
+- **Liquidación de comisiones** por semana o quincena.
+- **Instalación en el celular.** El ícono es solo SVG; faltan PNG de 192 y 512 px y el ícono de Apple.
+- **Política de tratamiento de datos** (Ley 1581).
 - Agenda con reservas desde un enlace público.
 - Recordatorios por WhatsApp.
-- Envío real del correo de recuperación.
-- Planes, cobro de la suscripción y publicación en un servidor.
-- Política de tratamiento de datos (Ley 1581).
-- Liquidación de comisiones por semana o quincena.
+- Planes y cobro de la suscripción.

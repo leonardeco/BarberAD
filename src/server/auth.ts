@@ -2,16 +2,13 @@ import { appDb } from "./db";
 import { ShopError, messageFromDatabase } from "./errors";
 import { hashPassword, verifyPassword } from "./password";
 import type { ShopContext } from "./types";
+import { checkCommission, checkPassword, cleanEmail, cleanName } from "./validation";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-function requirePassword(password: string) {
-  if (password.length < 8) {
-    throw new ShopError("La contraseña debe tener al menos 8 caracteres.");
-  }
-}
+const requirePassword = checkPassword;
 
 type MembershipRow = {
   member_id: string;
@@ -52,12 +49,13 @@ export async function createOwnerAccount(input: {
   shopName: string;
 }) {
   requirePassword(input.password);
-  const email = normalizeEmail(input.email);
-  if (!email.includes("@")) throw new ShopError("Escribe un correo válido.");
+  const email = cleanEmail(input.email);
+  const ownerName = cleanName(input.ownerName, "tu nombre");
+  const shopName = cleanName(input.shopName, "el nombre de la barbería");
   try {
     const rows = await appDb()<
       { user_id: string; shop_id: string; member_id: string }[]
-    >`select * from app_register_owner(${email}, ${await hashPassword(input.password)}, ${input.ownerName}, ${input.shopName})`;
+    >`select * from app_register_owner(${email}, ${await hashPassword(input.password)}, ${ownerName}, ${shopName})`;
     const row = rows[0];
     if (!row) throw new ShopError("No se pudo crear la barbería.");
     const member = await membershipFor(row.user_id);
@@ -77,11 +75,9 @@ export async function addBarberAccount(
 ) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede dar de alta barberos.");
   requirePassword(input.password);
-  if (!Number.isInteger(input.commissionPercent) || input.commissionPercent < 0 || input.commissionPercent > 100) {
-    throw new ShopError("La comisión debe estar entre 0 y 100.");
-  }
-  const email = normalizeEmail(input.email);
-  if (!email.includes("@")) throw new ShopError("Escribe un correo válido.");
+  checkCommission(input.commissionPercent);
+  const email = cleanEmail(input.email);
+  const displayName = cleanName(input.displayName, "el nombre del barbero");
   try {
     await appDb()`
       select app_add_barber(
@@ -89,7 +85,7 @@ export async function addBarberAccount(
         ${ctx.shopId}::uuid,
         ${email},
         ${await hashPassword(input.password)},
-        ${input.displayName},
+        ${displayName},
         ${input.commissionPercent}
       )
     `;
@@ -190,12 +186,21 @@ export async function memberEmails(ctx: ShopContext) {
   return new Map(rows.map((row) => [row.member_id, row.email]));
 }
 
+// Si el correo no existe, igual se hace el trabajo de comparar una contraseña,
+// para que la demora no delate qué correos tienen cuenta.
+let decoyHash: Promise<string> | null = null;
+
 export async function authenticate(email: string, password: string) {
   const rows = await appDb()<{ user_id: string; password_hash: string }[]>`
     select * from app_find_user_by_email(${normalizeEmail(email)})
   `;
   const user = rows[0];
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
+  if (!user) {
+    decoyHash ??= hashPassword("barberad-decoy");
+    await verifyPassword(password.slice(0, 200), await decoyHash);
+    throw new ShopError("Correo o contraseña incorrectos.");
+  }
+  if (!(await verifyPassword(password.slice(0, 200), user.password_hash))) {
     throw new ShopError("Correo o contraseña incorrectos.");
   }
   const member = await membershipFor(user.user_id);
