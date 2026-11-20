@@ -3,15 +3,46 @@ import { redirect } from "next/navigation";
 import { Scissors } from "lucide-react";
 import { EmptyState, PageTitle, buttonClass } from "@/components/ui";
 import { getShopContext } from "@/server/session";
-import { listServices } from "@/server/shop";
+import { listMembers, listServices } from "@/server/shop";
+import { appointmentForCheckout } from "@/server/agenda";
 import { CheckoutForm } from "./checkout-form";
 
 export const metadata = { title: "Cobrar" };
 
-export default async function ChargePage() {
+export default async function ChargePage({ searchParams }: { searchParams: Promise<{ cita?: string }> }) {
   const ctx = await getShopContext();
   if (!ctx) redirect("/salir");
-  const services = await listServices(ctx, true);
+  const citaId = (await searchParams).cita;
+  const appointment = citaId ? await appointmentForCheckout(ctx, citaId) : null;
+  if (citaId && !appointment) redirect("/agenda");
+  if (appointment) {
+    return (
+      <>
+        <PageTitle title="Cobrar cita" detail="El servicio y el barbero vienen de la cita. Ajusta el monto si hubo algo extra o un descuento." />
+        <CheckoutForm
+          appointment={{
+            id: appointment.id,
+            clientName: appointment.clientName,
+            memberName: appointment.memberName,
+            time: appointment.time,
+          }}
+          services={[
+            {
+              id: appointment.serviceId,
+              name: appointment.serviceName,
+              durationMin: appointment.durationMin,
+              listPrice: appointment.listPrice,
+            },
+          ]}
+        />
+      </>
+    );
+  }
+  const [services, members] = await Promise.all([
+    listServices(ctx, true),
+    ctx.role === "owner" ? listMembers(ctx) : Promise.resolve([]),
+  ]);
+  const barbers = members.filter((m) => m.active).map((m) => ({ id: m.id, name: m.display_name }));
   return (
     <>
       <PageTitle title="Cobrar" detail="Servicio, monto y pago. La comisión sale sola." />
@@ -33,6 +64,8 @@ export default async function ChargePage() {
         </EmptyState>
       ) : (
         <CheckoutForm
+          barbers={barbers}
+          selfId={ctx.memberId}
           services={services.map((service) => ({
             id: service.id,
             name: service.name,

@@ -3,10 +3,14 @@ import { redirect } from "next/navigation";
 import { ArrowLeftRight, Banknote, CreditCard, Plus, Scissors } from "lucide-react";
 import { Guide } from "@/components/guide";
 import { RefreshToday } from "@/components/refresh-today";
+import { VoidForm } from "./void-form";
 import { EmptyState, PageTitle, Stat, buttonClass, cardClass } from "@/components/ui";
 import { formatCop } from "@/server/money";
 import { getShopContext } from "@/server/session";
 import { guideStatus, listToday } from "@/server/shop";
+import { dayAgenda, timeLabel } from "@/server/agenda";
+import { pendingReminderCount } from "@/server/reminders";
+import { BellRing } from "lucide-react";
 
 export const metadata = { title: "Hoy" };
 
@@ -29,6 +33,10 @@ export default async function TodayPage() {
   const ctx = await getShopContext();
   if (!ctx) redirect("/salir");
   const [today, guide] = await Promise.all([listToday(ctx), guideStatus(ctx)]);
+  const [agenda, reminders] = await Promise.all([dayAgenda(ctx, today.day), pendingReminderCount(ctx)]);
+  const pending = agenda.appointments.filter((item) => item.status === "booked");
+  const attended = agenda.appointments.filter((item) => item.status === "done").length;
+  const noShows = agenda.appointments.filter((item) => item.status === "no_show").length;
   const owner = ctx.role === "owner";
   const cuts = today.checkouts.length;
   const top = today.barbers[0]?.charged ?? 0;
@@ -50,6 +58,16 @@ export default async function TodayPage() {
       />
 
       {guide && !guide.hidden ? <Guide done={guide.done} steps={guide.steps} /> : null}
+
+      {reminders > 0 ? (
+        <Link className={`${cardClass} mb-4 flex min-h-14 items-center gap-3 border-[#16A34A]/40 px-4`} href="/avisos">
+          <BellRing aria-hidden="true" className="text-[#4ADE80]" size={20} />
+          <span className="flex-1 text-sm">
+            {reminders === 1 ? "Tienes 1 aviso por WhatsApp por enviar" : `Tienes ${reminders} avisos por WhatsApp por enviar`}
+          </span>
+          <span className="text-sm font-semibold text-[#4ADE80]">Ver</span>
+        </Link>
+      ) : null}
 
       <section className={`${cardClass} relative overflow-hidden p-5`}>
         <div
@@ -82,9 +100,14 @@ export default async function TodayPage() {
         ) : null}
       </section>
 
-      <section className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-3">
         {owner ? (
           <>
+            <Stat
+              label="Para la barbería"
+              value={formatCop(today.charged - today.commission)}
+              detail={<Link className="text-[#D97706]" href="/reportes">Ver reportes</Link>}
+            />
             <Stat label="Ticket promedio" value={formatCop(today.averageTicket)} />
             <Stat label="Comisiones" value={formatCop(today.commission)} detail="Lo que se le debe al equipo" />
             <Stat label="Efectivo en caja" value={formatCop(today.expectedCash)} detail="Cobros y propinas en efectivo" />
@@ -101,6 +124,40 @@ export default async function TodayPage() {
           </>
         )}
       </section>
+
+      {agenda.appointments.length > 0 ? (
+        <section className="mt-8">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-semibold">Citas de hoy</h2>
+            <Link className="text-sm text-[#D97706]" href="/agenda">
+              Ver agenda
+            </Link>
+          </div>
+          <p className="mt-1 text-sm text-[#CBD5E1]">
+            {pending.length} por atender · {attended} atendidas{noShows ? ` · ${noShows} no vinieron` : ""}
+          </p>
+          {pending.length > 0 ? (
+            <ul className="mt-3 flex flex-col gap-2">
+              {pending.slice(0, 4).map((item) => (
+                <li key={item.id} className={`${cardClass} flex items-center gap-3 p-3`}>
+                  <span className="w-12 shrink-0 font-semibold tabular-nums">{timeLabel(item.startsAt, ctx.timezone)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{item.clientName}</span>
+                    <span className="block truncate text-sm text-[#94A3B8]">
+                      {item.serviceName}
+                      {owner ? ` · ${item.memberName}` : ""}
+                      {item.started ? " · en silla" : ""}
+                    </span>
+                  </span>
+                  <Link className={`${buttonClass.replace("w-full", "w-auto")} h-10 shrink-0 px-4 text-sm`} href={`/cobrar?cita=${item.id}`}>
+                    Cobrar
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       {owner && today.barbers.length > 0 ? (
         <section className="mt-8">
@@ -119,7 +176,8 @@ export default async function TodayPage() {
                   />
                 </div>
                 <p className="mt-2 text-sm text-[#CBD5E1]">
-                  {barber.cuts === 1 ? "1 corte" : `${barber.cuts} cortes`} · comisión {formatCop(barber.commission)}
+                  {barber.cuts === 1 ? "1 corte" : `${barber.cuts} cortes`}
+                  {barber.isOwner ? "" : ` · comisión ${formatCop(barber.commission)}`}
                   {barber.tips ? ` · propinas ${formatCop(barber.tips)}` : ""}
                 </p>
               </li>
@@ -166,7 +224,10 @@ export default async function TodayPage() {
                         Descuento de {formatCop(cut.discount)} sobre {formatCop(cut.listPrice)}: {cut.discountReason}
                       </p>
                     ) : null}
-                    <p className="mt-1 text-xs text-[#94A3B8]">Comisión {formatCop(cut.commissionAmount)}</p>
+                    {cut.isOwner ? null : (
+                      <p className="mt-1 text-xs text-[#94A3B8]">Comisión {formatCop(cut.commissionAmount)}</p>
+                    )}
+                    {owner && today.drawerStatus === "open" ? <VoidForm checkoutId={cut.id} /> : null}
                   </div>
                 </li>
               );
@@ -174,6 +235,26 @@ export default async function TodayPage() {
           </ul>
         )}
       </section>
+
+      {today.voided.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold">Anulados hoy</h2>
+          <ul className="mt-3 flex flex-col gap-2">
+            {today.voided.map((cut) => (
+              <li key={cut.id} className={`${cardClass} p-4 opacity-70`}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="truncate font-medium line-through">{cut.serviceName}</p>
+                  <p className="tabular-nums line-through">{formatCop(cut.charged + cut.tip)}</p>
+                </div>
+                <p className="text-sm text-[#CBD5E1]">
+                  {cut.time}
+                  {owner ? ` · ${cut.barberName}` : ""} · {cut.reason}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </>
   );
 }

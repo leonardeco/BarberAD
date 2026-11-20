@@ -4,6 +4,9 @@ import { endSessionAction } from "@/app/session-action";
 import { PageTitle, cardClass, quietButtonClass } from "@/components/ui";
 import { getShopContext } from "@/server/session";
 import { shopProfile } from "@/server/shop";
+import { shopSlug } from "@/server/agenda";
+import { appUrl } from "@/server/mail";
+import { CopyLink } from "@/components/copy-link";
 import { PasswordForm, ProfileForm } from "./forms";
 
 export const metadata = { title: "Mi cuenta" };
@@ -12,10 +15,16 @@ export default async function AccountPage() {
   const ctx = await getShopContext();
   if (!ctx) redirect("/salir");
   const profile = ctx.role === "owner" ? await shopProfile(ctx) : null;
+  const slug = await shopSlug(ctx);
 
   return (
     <>
       <PageTitle title="Mi cuenta" detail={`${ctx.displayName} · ${ctx.role === "owner" ? "Dueño" : "Barbero"} en ${ctx.shopName}`} />
+      {slug ? (
+        <div className="mb-4">
+          <CopyLink url={`${appUrl()}/r/${slug}`} />
+        </div>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         {profile ? <ProfileForm profile={profile} /> : null}
         <PasswordForm />

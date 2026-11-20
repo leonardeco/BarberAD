@@ -65,7 +65,9 @@ export default async function ServicesPage() {
                   <div className="min-w-0">
                     <p className="truncate font-medium">{service.name}</p>
                     <p className="text-sm text-[#94A3B8]">
-                      {service.duration_min} min{service.active ? "" : " · inactivo"}
+                      {service.duration_min} min
+                      {service.commission_percent !== null ? ` · comisión ${service.commission_percent}%` : ""}
+                      {service.active ? "" : " · inactivo"}
                     </p>
                   </div>
                   <p className="text-lg font-semibold tabular-nums">{formatCop(service.list_price)}</p>
@@ -82,6 +84,7 @@ export default async function ServicesPage() {
                         name: service.name,
                         durationMin: service.duration_min,
                         listPrice: service.list_price,
+                        commissionPercent: service.commission_percent,
                       }}
                     />
                     <form action={deactivateServiceAction} className="mt-2">

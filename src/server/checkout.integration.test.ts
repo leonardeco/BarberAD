@@ -213,3 +213,142 @@ test("password links are single use and each shop only edits itself", async () =
   );
   assert.equal(await shop.guideStatus(barber), null);
 });
+
+test("closing the drawer counts a checkout that is still in flight", async () => {
+  const { ensureLocalPostgres } = await import("./local-postgres.ts");
+  const { migrate } = await import("./migrate.ts");
+  await ensureLocalPostgres();
+  await migrate("barberad_test", { fresh: true });
+
+  const auth = await import("./auth.ts");
+  const shop = await import("./shop.ts");
+  const { withShop } = await import("./db.ts");
+
+  const owner = await auth.createOwnerAccount({
+    email: "dueno@barberad.local",
+    password: "clave-segura",
+    ownerName: "Ana",
+    shopName: "Imperial",
+  });
+  await shop.createService(owner, { name: "Corte", durationMin: 30, listPrice: 20000 });
+  const [service] = await shop.listServices(owner, true);
+  await shop.completeCheckout(owner, {
+    serviceId: service.id,
+    amount: 20000,
+    reason: "",
+    tip: 0,
+    paymentMethod: "cash",
+    clientKey: crypto.randomUUID(),
+  });
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let inserted!: () => void;
+  const insertedSignal = new Promise<void>((resolve) => (inserted = resolve));
+  const inFlight = withShop(owner, async (tx) => {
+    await tx`
+      insert into checkouts (
+        shop_id, member_id, service_id, service_name, business_date, list_price, extras,
+        discount, discount_reason, charged, tip, currency, payment_method,
+        commission_percent, commission_amount, client_key
+      ) values (
+        ${owner.shopId}::uuid, ${owner.memberId}::uuid, ${service.id}::uuid, 'Corte',
+        (now() at time zone 'America/Bogota')::date, 10000, 0, 0, '', 10000, 0, 'COP', 'cash',
+        100, 10000, ${crypto.randomUUID()}::uuid
+      )
+    `;
+    inserted();
+    await gate;
+  });
+  await insertedSignal;
+
+  const closing = shop.closeDrawer(owner, 30000);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  release();
+  await inFlight;
+  const result = await closing;
+  assert.equal(result.expectedCash, 30000);
+  assert.equal(result.difference, 0);
+  await assert.rejects(() => shop.closeDrawer(owner, 30000), /ya está cerrada/);
+});
+
+test("limits, owner commission and housekeeping", async () => {
+  const { ensureLocalPostgres } = await import("./local-postgres.ts");
+  const { adminUrl } = await import("./database-url.ts");
+  const { migrate } = await import("./migrate.ts");
+  await ensureLocalPostgres();
+  await migrate("barberad_test", { fresh: true });
+
+  const auth = await import("./auth.ts");
+  const shop = await import("./shop.ts");
+
+  await assert.rejects(
+    () => auth.createOwnerAccount({ email: "sin-arroba", password: "clave-segura", ownerName: "Ana", shopName: "X" }),
+    /correo válido/,
+  );
+  await assert.rejects(
+    () => auth.createOwnerAccount({ email: "a@b.co", password: "clave-segura", ownerName: "  ", shopName: "X" }),
+    /Escribe tu nombre/,
+  );
+  await assert.rejects(
+    () => auth.createOwnerAccount({ email: "a@b.co", password: "x".repeat(201), ownerName: "Ana", shopName: "X" }),
+    /no puede pasar de 200/,
+  );
+
+  const owner = await auth.createOwnerAccount({
+    email: "dueno@barberad.local",
+    password: "clave-segura",
+    ownerName: "Ana",
+    shopName: "Imperial",
+  });
+
+  await assert.rejects(
+    () => shop.createService(owner, { name: "Mega", durationMin: 30, listPrice: 99_999_999_999 }),
+    /no puede pasar de/,
+  );
+  await assert.rejects(
+    () => shop.createService(owner, { name: "x".repeat(81), durationMin: 30, listPrice: 10000 }),
+    /demasiado largo/,
+  );
+  await assert.rejects(() => shop.closeDrawer(owner, 2_000_000_000), /no puede pasar de/);
+
+  await shop.createService(owner, { name: "Corte", durationMin: 30, listPrice: 20000 });
+  const [service] = await shop.listServices(owner, true);
+  await assert.rejects(
+    () =>
+      shop.completeCheckout(owner, {
+        serviceId: service.id,
+        amount: 25_000_000,
+        reason: "",
+        tip: 0,
+        paymentMethod: "cash",
+        clientKey: crypto.randomUUID(),
+      }),
+    /no puede pasar de/,
+  );
+  await shop.completeCheckout(owner, {
+    serviceId: service.id,
+    amount: 20000,
+    reason: "",
+    tip: 0,
+    paymentMethod: "cash",
+    clientKey: crypto.randomUUID(),
+  });
+  const today = await shop.listToday(owner);
+  assert.equal(today.charged, 20000);
+  assert.equal(today.commission, 0, "lo que cobra el dueño no es comisión del equipo");
+  assert.equal(today.barbers[0].isOwner, true);
+
+  await assert.rejects(() => auth.authenticate("nadie@barberad.local", "cualquiera-123"), /incorrectos/);
+
+  const postgres = (await import("postgres")).default;
+  const admin = postgres(adminUrl("barberad_test"), { max: 1 });
+  try {
+    await admin`insert into sessions (user_id, token_hash, expires_at) values (${owner.userId}::uuid, 'vieja', now() - interval '1 day')`;
+    await auth.createSession(owner.userId, "nueva");
+    const left = await admin<{ token_hash: string }[]>`select token_hash from sessions order by token_hash`;
+    assert.deepEqual(left.map((row) => row.token_hash), ["nueva"]);
+  } finally {
+    await admin.end();
+  }
+});

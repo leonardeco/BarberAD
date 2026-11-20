@@ -4,15 +4,23 @@ import { consumePasswordReset, createPasswordReset } from "@/server/auth";
 import { ShopError } from "@/server/errors";
 import { appUrl, sendPasswordReset } from "@/server/mail";
 import { newToken, tokenHash } from "@/server/token";
+import { clientIp } from "@/server/session";
+import { isBlocked, recordAttempt } from "@/server/throttle";
 
 export type ResetState = { ok: boolean; message: string } | null;
 
 export async function requestResetAction(_prev: ResetState, formData: FormData): Promise<ResetState> {
   const email = String(formData.get("email") ?? "").trim();
   if (!email.includes("@")) return { ok: false, message: "Escribe un correo válido." };
-  const token = newToken();
-  if (await createPasswordReset(email, tokenHash(token))) {
-    await sendPasswordReset(email, `${appUrl()}/recuperar/${token}`);
+  // Pasado el límite se responde igual, pero no se envía nada: así no sirve para llenar de correos a nadie.
+  const key = email.toLowerCase();
+  const ip = await clientIp();
+  if (!(await isBlocked("reset", key, ip))) {
+    await recordAttempt("reset", key, ip);
+    const token = newToken();
+    if (await createPasswordReset(email, tokenHash(token))) {
+      await sendPasswordReset(email, `${appUrl()}/recuperar/${token}`);
+    }
   }
   return {
     ok: true,
