@@ -56,6 +56,8 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 - **Enlace de reservas.** Cada barbería tiene su página pública (`/r/nombre-de-la-barberia`): el cliente elige servicio, barbero o "con quien esté libre", día y hora, y deja su nombre y WhatsApp. Solo ve horas libres dentro del horario, y la base de datos impide que dos citas del mismo barbero se crucen. Un mismo número puede tener máximo 3 citas pendientes.
 - **Horarios.** Quién recibe citas y de qué hora a qué hora trabaja cada día. Los barberos nuevos arrancan de lunes a sábado, de 9:00 a 19:00; el dueño también, si al registrarse marca que atiende.
 - **De la cita al cobro.** Cada cita pasa de reservada a confirmada, en silla y atendida. "Terminar y cobrar" abre el cobro con el servicio, el barbero y el precio de la cita; al confirmar, la cita queda atendida y no se puede cobrar dos veces. Si el dueño cobra la cita de un barbero, el cobro y la comisión quedan a nombre del barbero. "No vino" se marca cuando ya pasó la hora. El botón de WhatsApp abre un mensaje listo para confirmar la cita.
+- **Avisos por WhatsApp (sin costo).** Una lista de mensajes por enviar: el recordatorio para las citas de mañana, el de las citas de las próximas 3 horas, el "gracias por venir" con el enlace para volver a reservar, y el "hace rato no vienes" para clientes que no vuelven hace más de 3 semanas. Cada botón abre WhatsApp con el mensaje escrito y queda anotado como enviado. El dueño puede cambiar los textos. Hoy avisa cuántos hay pendientes.
+- **El cliente cancela solo.** El recordatorio y la confirmación de la reserva traen un enlace donde el cliente ve su cita y la puede cancelar; la hora queda libre y en la agenda sale "Canceló el cliente".
 - **Clientes.** Se crean solos al reservar. Visitas, próxima cita, notas y WhatsApp.
 
 **El barbero**
@@ -63,6 +65,7 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 - **Cobrar.** Servicio, valor y método: efectivo, transferencia o tarjeta. Si el valor baja del precio, pide el motivo del descuento. La propina va aparte y no entra en la comisión.
 - **Hoy.** Su comisión, sus cortes y sus propinas del día. No ve lo de los demás.
 - **Agenda.** Solo la suya. Puede agendar y cancelar sus propias citas.
+- **Avisos.** Los recordatorios y agradecimientos de sus propias citas.
 
 **Cualquiera**
 
@@ -130,5 +133,5 @@ Lo que hoy impide poner la app en un servidor:
 - **Instalación en el celular.** El ícono es solo SVG; faltan PNG de 192 y 512 px y el ícono de Apple.
 - **Política de tratamiento de datos** (Ley 1581).
 - Agenda con reservas desde un enlace público.
-- Recordatorios por WhatsApp.
+- Envío automático de los recordatorios con la API de WhatsApp Business (hoy los envía el barbero con un toque).
 - Planes y cobro de la suscripción.

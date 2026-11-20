@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const shopPaths = ["/hoy", "/agenda", "/clientes", "/horarios", "/mas", "/reportes", "/liquidar", "/cobrar", "/servicios", "/equipo", "/caja", "/cuenta"];
+const shopPaths = ["/hoy", "/agenda", "/avisos", "/clientes", "/horarios", "/mas", "/reportes", "/liquidar", "/cobrar", "/servicios", "/equipo", "/caja", "/cuenta"];
 
 export function middleware(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get("barberad_session"));
@@ -19,6 +19,7 @@ export const config = {
   matcher: [
     "/hoy",
     "/agenda/:path*",
+    "/avisos/:path*",
     "/clientes/:path*",
     "/horarios/:path*",
     "/mas/:path*",

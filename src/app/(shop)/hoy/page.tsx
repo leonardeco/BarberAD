@@ -8,6 +8,8 @@ import { formatCop } from "@/server/money";
 import { getShopContext } from "@/server/session";
 import { guideStatus, listToday } from "@/server/shop";
 import { dayAgenda, timeLabel } from "@/server/agenda";
+import { pendingReminderCount } from "@/server/reminders";
+import { BellRing } from "lucide-react";
 
 export const metadata = { title: "Hoy" };
 
@@ -30,7 +32,7 @@ export default async function TodayPage() {
   const ctx = await getShopContext();
   if (!ctx) redirect("/salir");
   const [today, guide] = await Promise.all([listToday(ctx), guideStatus(ctx)]);
-  const agenda = await dayAgenda(ctx, today.day);
+  const [agenda, reminders] = await Promise.all([dayAgenda(ctx, today.day), pendingReminderCount(ctx)]);
   const pending = agenda.appointments.filter((item) => item.status === "booked");
   const attended = agenda.appointments.filter((item) => item.status === "done").length;
   const noShows = agenda.appointments.filter((item) => item.status === "no_show").length;
@@ -55,6 +57,16 @@ export default async function TodayPage() {
       />
 
       {guide && !guide.hidden ? <Guide done={guide.done} steps={guide.steps} /> : null}
+
+      {reminders > 0 ? (
+        <Link className={`${cardClass} mb-4 flex min-h-14 items-center gap-3 border-[#16A34A]/40 px-4`} href="/avisos">
+          <BellRing aria-hidden="true" className="text-[#4ADE80]" size={20} />
+          <span className="flex-1 text-sm">
+            {reminders === 1 ? "Tienes 1 aviso por WhatsApp por enviar" : `Tienes ${reminders} avisos por WhatsApp por enviar`}
+          </span>
+          <span className="text-sm font-semibold text-[#4ADE80]">Ver</span>
+        </Link>
+      ) : null}
 
       <section className={`${cardClass} relative overflow-hidden p-5`}>
         <div

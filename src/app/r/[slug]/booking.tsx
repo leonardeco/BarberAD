@@ -50,7 +50,7 @@ export function Booking({ shop, slug }: { shop: PublicShop; slug: string }) {
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
-  const [done, setDone] = useState<{ memberName: string; startsAt: string } | null>(null);
+  const [done, setDone] = useState<{ memberName: string; startsAt: string; token: string } | null>(null);
 
   const service = shop.services.find((item) => item.id === serviceId);
   const barber = shop.barbers.find((item) => item.id === memberId);
@@ -83,7 +83,7 @@ export function Booking({ shop, slug }: { shop: PublicShop; slug: string }) {
     try {
       const result = await bookAction({ slug, serviceId, memberId, startsAt, name, phone });
       if (result.ok) {
-        setDone({ memberName: result.memberName, startsAt: result.startsAt });
+        setDone({ memberName: result.memberName, startsAt: result.startsAt, token: result.token });
       } else {
         setMessage(result.message);
         if (result.message.includes("ocupar")) {
@@ -110,8 +110,12 @@ export function Booking({ shop, slug }: { shop: PublicShop; slug: string }) {
         </p>
         <p className="mt-1 text-lg font-semibold">{longWhen(done.startsAt, shop.timezone)}</p>
         <p className="mt-4 text-sm text-[#94A3B8]">
-          Si no puedes venir, avísale a la barbería{shop.phone ? ` al ${shop.phone}` : ""}.
+          Te escribiremos por WhatsApp para recordártela. Si no puedes venir, cancélala para que otro cliente aproveche la
+          hora.
         </p>
+        <a className="mt-4 inline-flex h-12 items-center justify-center text-sm text-[#D97706]" href={`/c/${done.token}`}>
+          Ver o cancelar mi cita
+        </a>
       </section>
     );
   }

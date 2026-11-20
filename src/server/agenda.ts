@@ -116,7 +116,7 @@ export async function bookPublic(input: {
   const name = cleanName(input.name, "tu nombre");
   const phone = cleanPhone(input.phone);
   try {
-    const rows = await appDb()<{ appointment_id: string; member_name: string; starts_at: Date; ends_at: Date }[]>`
+    const rows = await appDb()<{ appointment_id: string; member_name: string; starts_at: Date; ends_at: Date; client_token: string }[]>`
       select * from app_public_book(
         ${input.slug}, ${input.serviceId}::uuid, ${input.memberId}::uuid,
         ${startsAt.toISOString()}::timestamptz, ${name}, ${phone}
@@ -124,7 +124,7 @@ export async function bookPublic(input: {
     `;
     const row = rows[0];
     if (!row) throw new ShopError("No se pudo reservar. Inténtalo de nuevo.");
-    return { id: row.appointment_id, memberName: row.member_name, startsAt: row.starts_at.toISOString() };
+    return { id: row.appointment_id, memberName: row.member_name, startsAt: row.starts_at.toISOString(), token: row.client_token };
   } catch (error) {
     guard(error);
   }
@@ -146,6 +146,7 @@ export type AgendaAppointment = {
   source: "public" | "staff";
   confirmed: boolean;
   started: boolean;
+  cancelledByClient: boolean;
   charged: number | null;
 };
 
@@ -174,6 +175,7 @@ export async function dayAgenda(ctx: ShopContext, day: string) {
              c.name as "clientName", c.phone as "clientPhone",
              a.starts_at as "startsAt", a.ends_at as "endsAt", a.status, a.source,
              (a.confirmed_at is not null) as confirmed, (a.started_at is not null) as started,
+             a.cancelled_by_client as "cancelledByClient",
              k.charged + k.tip as charged
       from appointments a
       join shop_members m on m.id = a.member_id

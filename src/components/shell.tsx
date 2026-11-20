@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarClock, HandCoins, CalendarDays, Clock, Contact, LogOut, Menu, Plus, Scissors, Users, Wallet } from "lucide-react";
+import { BarChart3, BellRing, CalendarClock, HandCoins, CalendarDays, Clock, Contact, LogOut, Menu, Plus, Scissors, Users, Wallet } from "lucide-react";
 import { endSessionAction } from "@/app/session-action";
 import { Logo, LogoMark } from "./logo";
 
@@ -12,6 +12,7 @@ const links: NavLink[] = [
   { href: "/hoy", label: "Hoy", icon: CalendarDays, ownerOnly: false, mobile: "both" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, ownerOnly: false, mobile: "both" },
   { href: "/cobrar", label: "Cobrar", icon: Plus, ownerOnly: false, mobile: "both" },
+  { href: "/avisos", label: "Avisos", icon: BellRing, ownerOnly: false, mobile: "barber" },
   { href: "/clientes", label: "Clientes", icon: Contact, ownerOnly: false, mobile: "barber" },
   { href: "/caja", label: "Caja", icon: Wallet, ownerOnly: true, mobile: "owner" },
   { href: "/reportes", label: "Reportes", icon: BarChart3, ownerOnly: true, mobile: "none" },

@@ -18,6 +18,14 @@ const nextConfig: NextConfig = {
         source: "/recuperar/:token",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
+      {
+        // Igual para el enlace con el que el cliente ve o cancela su cita.
+        source: "/c/:token",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex" },
+        ],
+      },
     ];
   },
 };

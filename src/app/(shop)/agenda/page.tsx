@@ -22,6 +22,7 @@ const statusLabel: Record<AgendaAppointment["status"] | "confirmed" | "started",
 };
 
 function statusOf(item: AgendaAppointment) {
+  if (item.status === "cancelled" && item.cancelledByClient) return { ...statusLabel.cancelled, text: "Canceló el cliente" };
   if (item.status !== "booked") return statusLabel[item.status];
   return statusLabel[item.started ? "started" : item.confirmed ? "confirmed" : "booked"];
 }

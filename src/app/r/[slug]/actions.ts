@@ -15,7 +15,7 @@ export async function slotsAction(input: {
 }
 
 export type BookResult =
-  | { ok: true; memberName: string; startsAt: string }
+  | { ok: true; memberName: string; startsAt: string; token: string }
   | { ok: false; message: string };
 
 export async function bookAction(input: {
@@ -28,7 +28,7 @@ export async function bookAction(input: {
 }): Promise<BookResult> {
   try {
     const result = await bookPublic(input);
-    return { ok: true, memberName: result.memberName, startsAt: result.startsAt };
+    return { ok: true, memberName: result.memberName, startsAt: result.startsAt, token: result.token };
   } catch (error) {
     if (error instanceof ShopError) return { ok: false, message: error.message };
     console.error("[BarberAD] No se pudo reservar:", error);
