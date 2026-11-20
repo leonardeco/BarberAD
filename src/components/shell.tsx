@@ -2,16 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, LogOut, Plus, Scissors, Users, Wallet } from "lucide-react";
+import { CalendarClock, CalendarDays, Clock, Contact, LogOut, Menu, Plus, Scissors, Users, Wallet } from "lucide-react";
 import { endSessionAction } from "@/app/session-action";
 import { Logo, LogoMark } from "./logo";
 
-const links = [
-  { href: "/hoy", label: "Hoy", icon: CalendarDays, ownerOnly: false },
-  { href: "/servicios", label: "Servicios", icon: Scissors, ownerOnly: true },
-  { href: "/cobrar", label: "Cobrar", icon: Plus, ownerOnly: false },
-  { href: "/equipo", label: "Equipo", icon: Users, ownerOnly: true },
-  { href: "/caja", label: "Caja", icon: Wallet, ownerOnly: true },
+type NavLink = { href: string; label: string; icon: typeof CalendarDays; ownerOnly: boolean; mobile: "owner" | "barber" | "both" | "none" };
+
+const links: NavLink[] = [
+  { href: "/hoy", label: "Hoy", icon: CalendarDays, ownerOnly: false, mobile: "both" },
+  { href: "/agenda", label: "Agenda", icon: CalendarClock, ownerOnly: false, mobile: "both" },
+  { href: "/cobrar", label: "Cobrar", icon: Plus, ownerOnly: false, mobile: "both" },
+  { href: "/clientes", label: "Clientes", icon: Contact, ownerOnly: false, mobile: "barber" },
+  { href: "/caja", label: "Caja", icon: Wallet, ownerOnly: true, mobile: "owner" },
+  { href: "/servicios", label: "Servicios", icon: Scissors, ownerOnly: true, mobile: "none" },
+  { href: "/equipo", label: "Equipo", icon: Users, ownerOnly: true, mobile: "none" },
+  { href: "/horarios", label: "Horarios", icon: Clock, ownerOnly: true, mobile: "none" },
+  { href: "/mas", label: "Más", icon: Menu, ownerOnly: true, mobile: "owner" },
 ];
 
 type Item = (typeof links)[number];
@@ -37,7 +43,8 @@ export function Shell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const items = links.filter((item) => role === "owner" || !item.ownerOnly);
+  const items = links.filter((item) => (role === "owner" || !item.ownerOnly) && item.href !== "/mas");
+  const mobileItems = links.filter((item) => item.mobile === "both" || item.mobile === role);
   const roleLabel = role === "owner" ? "Dueño" : "Barbero";
 
   return (
@@ -101,7 +108,7 @@ export function Shell({
         aria-label="Principal"
         className="fixed inset-x-0 bottom-0 z-10 flex items-end border-t border-white/10 bg-[#0F172A]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:hidden"
       >
-        {items.map((item) => (
+        {mobileItems.map((item) => (
           <BottomLink key={item.href} item={item} active={pathname === item.href} />
         ))}
       </nav>

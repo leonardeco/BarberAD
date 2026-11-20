@@ -17,7 +17,11 @@ export async function registerAction(_prev: RegisterState, formData: FormData): 
     email: String(formData.get("email") ?? ""),
   };
   try {
-    const ctx = await createOwnerAccount({ ...values, password: String(formData.get("password") ?? "") });
+    const ctx = await createOwnerAccount({
+      ...values,
+      password: String(formData.get("password") ?? ""),
+      takesAppointments: formData.get("takesAppointments") === "on",
+    });
     await startSession(ctx.userId);
   } catch (error) {
     if (error instanceof ShopError) return { message: error.message, values };

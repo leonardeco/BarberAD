@@ -1,3 +1,4 @@
+import { slugify } from "./agenda";
 import { appDb } from "./db";
 import { ShopError, messageFromDatabase } from "./errors";
 import { hashPassword, verifyPassword } from "./password";
@@ -47,6 +48,7 @@ export async function createOwnerAccount(input: {
   password: string;
   ownerName: string;
   shopName: string;
+  takesAppointments?: boolean;
 }) {
   requirePassword(input.password);
   const email = cleanEmail(input.email);
@@ -55,7 +57,10 @@ export async function createOwnerAccount(input: {
   try {
     const rows = await appDb()<
       { user_id: string; shop_id: string; member_id: string }[]
-    >`select * from app_register_owner(${email}, ${await hashPassword(input.password)}, ${ownerName}, ${shopName})`;
+    >`select * from app_register_owner(
+      ${email}, ${await hashPassword(input.password)}, ${ownerName}, ${shopName},
+      ${slugify(shopName)}, ${input.takesAppointments ?? false}
+    )`;
     const row = rows[0];
     if (!row) throw new ShopError("No se pudo crear la barbería.");
     const member = await membershipFor(row.user_id);
