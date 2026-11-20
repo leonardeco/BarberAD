@@ -45,6 +45,10 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 - **Servicios.** Nombre, duración y precio en pesos enteros. Trae plantillas de un toque (corte clásico, fade, barba, corte + barba, infantil, cejas) y cada servicio se puede editar o desactivar.
 - **Equipo.** Cada barbero con su correo, una contraseña inicial y su porcentaje de comisión. Después puede cambiarle la comisión, que aplica desde el siguiente cobro, o ponerle una contraseña nueva si la olvidó.
 - **Hoy.** Las citas que faltan por atender, con botón para cobrarlas. Lo cobrado por método de pago, el ticket promedio, las comisiones que se le deben al equipo, el efectivo que debe haber en la gaveta, los descuentos con su motivo y lo que hizo cada barbero.
+- **Reportes.** Hoy, ayer, esta semana, este mes, el mes pasado o un rango de fechas. Lo principal es **cuánto le queda a la barbería**: lo cobrado menos las comisiones del equipo (lo que cobra el dueño con sus manos es todo de la barbería, y las propinas son de los barberos). Compara contra el período anterior y muestra cortes, ticket promedio, métodos de pago, día a día, por servicio y por barbero (su comisión, lo que deja a la barbería y qué tanto se llenó su agenda), y cuántas citas se atendieron, no vinieron o se cancelaron. Se baja a Excel.
+- **Liquidar comisiones.** Lo que se le debe a cada barbero desde su último pago: comisión más propinas, que entraron a la caja. Al marcarlo como pagado queda registrado con los cobros exactos que cubre; un cobro no se paga dos veces y uno que entre mientras se liquida queda para el siguiente pago.
+- **Comisión por servicio.** Opcional: por ejemplo 50% en cortes y 30% en barba. Si el servicio no la tiene, se usa la del barbero.
+- **Cobrar a nombre de un barbero.** El dueño elige quién atendió; el cobro y la comisión quedan a nombre de ese barbero.
 - **Caja.** El efectivo esperado contra el contado, con lo que sobra o falta, y los últimos siete cierres. Cerrada, ese día no recibe otro cobro.
 - **Mi cuenta.** Teléfono y dirección de la barbería, y el cambio de contraseña.
 
@@ -120,10 +124,9 @@ Lo que hoy impide poner la app en un servidor:
 
 - **Anular un cobro.** Un cobro mal cargado (valor, servicio o método) hoy no tiene arreglo desde la app. Hace falta una anulación del dueño, con motivo, que quede registrada sin tocar el cobro original.
 - **Reabrir o cobrar tarde.** Cerrada la caja, ese día no admite más cobros hasta la medianoche. Un cliente que llega después del cierre no se puede cobrar.
-- **Historial.** Hoy solo muestra el día en curso. Faltan los días anteriores, la semana y el mes, y poder bajarlo a una hoja de cálculo.
 - **Reactivar a un barbero** desactivado. Su correo queda ocupado y no se puede volver a registrar.
 - **Cobrar sin señal.** Si se va la señal, el cobro no se guarda. La clave del cobro ya permite reintentar sin duplicar; falta guardarlo en el celular y enviarlo al volver.
-- **Liquidación de comisiones** por semana o quincena.
+- **Gastos** (arriendo, productos) para ver la utilidad neta del mes.
 - **Instalación en el celular.** El ícono es solo SVG; faltan PNG de 192 y 512 px y el ícono de Apple.
 - **Política de tratamiento de datos** (Ley 1581).
 - Agenda con reservas desde un enlace público.

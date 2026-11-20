@@ -13,6 +13,7 @@ export async function chargeAction(input: {
   paymentMethod: string;
   clientKey: string;
   appointmentId?: string | null;
+  memberId?: string | null;
 }): Promise<{ ok: true; receipt: CheckoutReceipt } | { ok: false; message: string }> {
   const ctx = await getShopContext();
   if (!ctx) return { ok: false, message: "Tu sesión venció. Entra de nuevo." };

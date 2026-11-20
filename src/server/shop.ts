@@ -16,21 +16,29 @@ export type ServiceRow = {
   name: string;
   duration_min: number;
   list_price: number;
+  commission_percent: number | null;
   active: boolean;
 };
 
+function checkServiceCommission(value: number | null | undefined) {
+  if (value === null || value === undefined) return null;
+  checkCommission(value);
+  return value;
+}
+
 export async function createService(
   ctx: ShopContext,
-  input: { name: string; durationMin: number; listPrice: number },
+  input: { name: string; durationMin: number; listPrice: number; commissionPercent?: number | null },
 ) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede crear servicios.");
+  const servicePercent = checkServiceCommission(input.commissionPercent);
   const name = cleanName(input.name, "el nombre del servicio");
   checkDuration(input.durationMin);
   wholePesos(input.listPrice, "El precio");
   try {
     await withShop(ctx, (tx) => tx`
-      insert into services (shop_id, name, duration_min, list_price)
-      values (${ctx.shopId}::uuid, ${name}, ${input.durationMin}, ${input.listPrice})
+      insert into services (shop_id, name, duration_min, list_price, commission_percent)
+      values (${ctx.shopId}::uuid, ${name}, ${input.durationMin}, ${input.listPrice}, ${servicePercent})
     `);
   } catch (error) {
     guard(error);
@@ -40,15 +48,17 @@ export async function createService(
 export async function updateService(
   ctx: ShopContext,
   serviceId: string,
-  input: { name: string; durationMin: number; listPrice: number },
+  input: { name: string; durationMin: number; listPrice: number; commissionPercent?: number | null },
 ) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede editar servicios.");
+  const servicePercent = checkServiceCommission(input.commissionPercent);
   const name = cleanName(input.name, "el nombre del servicio");
   checkDuration(input.durationMin);
   wholePesos(input.listPrice, "El precio");
   const rows = await withShop(ctx, (tx) => tx`
     update services
-    set name = ${name}, duration_min = ${input.durationMin}, list_price = ${input.listPrice}
+    set name = ${name}, duration_min = ${input.durationMin}, list_price = ${input.listPrice},
+        commission_percent = ${servicePercent}
     where id = ${serviceId}::uuid and shop_id = ${ctx.shopId}::uuid
     returning id
   `);
@@ -65,7 +75,7 @@ export async function deactivateService(ctx: ShopContext, serviceId: string) {
 
 export async function listServices(ctx: ShopContext, activeOnly: boolean) {
   return withShop(ctx, (tx) => tx<ServiceRow[]>`
-    select id, name, duration_min, list_price, active
+    select id, name, duration_min, list_price, commission_percent, active
     from services
     where shop_id = ${ctx.shopId}::uuid
       and (${activeOnly} = false or active = true)
@@ -225,6 +235,7 @@ export async function completeCheckout(
     paymentMethod: string;
     clientKey: string;
     appointmentId?: string | null;
+    memberId?: string | null;
   },
 ): Promise<CheckoutReceipt> {
   if (!methods.has(input.paymentMethod as PaymentMethod)) {
@@ -263,9 +274,11 @@ export async function completeCheckout(
           status: string;
           commission_percent: number;
         }[]>`
-          select a.member_id, a.service_id, a.service_name, a.list_price, a.status, m.commission_percent
+          select a.member_id, a.service_id, a.service_name, a.list_price, a.status,
+                 case when m.role = 'owner' then 100 else coalesce(v.commission_percent, m.commission_percent) end as commission_percent
           from appointments a
           join shop_members m on m.id = a.member_id
+          join services v on v.id = a.service_id
           where a.id = ${appointmentId}::uuid and a.shop_id = ${ctx.shopId}::uuid
           for update of a
         `;
@@ -281,12 +294,21 @@ export async function completeCheckout(
         serviceId = appointment.service_id;
         service = { name: appointment.service_name, list_price: appointment.list_price };
       } else {
-        const services = await tx<{ name: string; list_price: number }[]>`
-          select name, list_price
-          from services
-          where id = ${input.serviceId}::uuid and shop_id = ${ctx.shopId}::uuid and active
+        // El dueño puede registrar el cobro a nombre de un barbero.
+        if (input.memberId && input.memberId !== ctx.memberId) {
+          if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede cobrar a nombre de otro.");
+          if (!/^[0-9a-f-]{36}$/i.test(input.memberId)) throw new ShopError("Ese barbero no existe.");
+          memberId = input.memberId;
+        }
+        const services = await tx<{ name: string; list_price: number; commission_percent: number }[]>`
+          select v.name, v.list_price,
+                 case when m.role = 'owner' then 100 else coalesce(v.commission_percent, m.commission_percent) end as commission_percent
+          from services v
+          join shop_members m on m.id = ${memberId}::uuid and m.shop_id = v.shop_id and m.active
+          where v.id = ${input.serviceId}::uuid and v.shop_id = ${ctx.shopId}::uuid and v.active
         `;
         service = services[0];
+        if (service) commissionPercent = services[0].commission_percent;
       }
       if (!service) throw new ShopError("Ese servicio no está disponible.");
       const money = deriveMoney(service.list_price, input.amount, input.reason);

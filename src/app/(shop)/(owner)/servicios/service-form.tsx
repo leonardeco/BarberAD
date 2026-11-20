@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { createServiceAction, updateServiceAction } from "./actions";
 import { Field, Notice, buttonClass, cardClass, inputClass } from "@/components/ui";
 
-type Service = { id: string; name: string; durationMin: number; listPrice: number };
+type Service = { id: string; name: string; durationMin: number; listPrice: number; commissionPercent: number | null };
 
 export function ServiceForm({ service }: { service?: Service }) {
   const [state, action, pending] = useActionState(service ? updateServiceAction : createServiceAction, null);
@@ -39,6 +39,16 @@ export function ServiceForm({ service }: { service?: Service }) {
           />
         </Field>
       </div>
+      <Field label="Comisión de este servicio (%)" hint="Déjalo vacío para usar la comisión de cada barbero.">
+        <input
+          className={`${inputClass} tabular-nums`}
+          defaultValue={service?.commissionPercent ?? ""}
+          inputMode="numeric"
+          maxLength={3}
+          name="commissionPercent"
+          placeholder="La del barbero"
+        />
+      </Field>
       {state?.message ? <Notice tone={state.ok ? "ok" : "error"}>{state.message}</Notice> : null}
       <button className={buttonClass} disabled={pending} type="submit">
         {pending ? "Guardando…" : service ? "Guardar cambios" : "Agregar servicio"}

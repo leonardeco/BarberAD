@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Scissors } from "lucide-react";
 import { EmptyState, PageTitle, buttonClass } from "@/components/ui";
 import { getShopContext } from "@/server/session";
-import { listServices } from "@/server/shop";
+import { listMembers, listServices } from "@/server/shop";
 import { appointmentForCheckout } from "@/server/agenda";
 import { CheckoutForm } from "./checkout-form";
 
@@ -38,7 +38,11 @@ export default async function ChargePage({ searchParams }: { searchParams: Promi
       </>
     );
   }
-  const services = await listServices(ctx, true);
+  const [services, members] = await Promise.all([
+    listServices(ctx, true),
+    ctx.role === "owner" ? listMembers(ctx) : Promise.resolve([]),
+  ]);
+  const barbers = members.filter((m) => m.active).map((m) => ({ id: m.id, name: m.display_name }));
   return (
     <>
       <PageTitle title="Cobrar" detail="Servicio, monto y pago. La comisión sale sola." />
@@ -60,6 +64,8 @@ export default async function ChargePage({ searchParams }: { searchParams: Promi
         </EmptyState>
       ) : (
         <CheckoutForm
+          barbers={barbers}
+          selfId={ctx.memberId}
           services={services.map((service) => ({
             id: service.id,
             name: service.name,

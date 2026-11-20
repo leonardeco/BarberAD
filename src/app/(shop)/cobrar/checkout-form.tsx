@@ -20,7 +20,18 @@ const stepNames = ["Servicio", "Monto", "Pago"];
 
 type FromAppointment = { id: string; clientName: string; memberName: string; time: string };
 
-export function CheckoutForm({ services, appointment }: { services: Service[]; appointment?: FromAppointment }) {
+export function CheckoutForm({
+  services,
+  appointment,
+  barbers,
+  selfId,
+}: {
+  services: Service[];
+  appointment?: FromAppointment;
+  barbers?: { id: string; name: string }[];
+  selfId?: string;
+}) {
+  const [memberId, setMemberId] = useState(selfId ?? "");
   const router = useRouter();
   const [clientKey, setClientKey] = useState(() => crypto.randomUUID());
   const [step, setStep] = useState(appointment ? 2 : 1);
@@ -60,6 +71,7 @@ export function CheckoutForm({ services, appointment }: { services: Service[]; a
     setStep(1);
     setTip("0");
     setMethod("cash");
+    setMemberId(selfId ?? "");
     setReason("");
     setMessage("");
   }
@@ -76,6 +88,7 @@ export function CheckoutForm({ services, appointment }: { services: Service[]; a
         paymentMethod: method,
         clientKey,
         appointmentId: appointment?.id ?? null,
+        memberId: appointment ? null : memberId || null,
       });
       if (!result.ok) {
         setMessage(result.message);
@@ -223,6 +236,26 @@ export function CheckoutForm({ services, appointment }: { services: Service[]; a
 
       {step === 3 ? (
         <div className="flex flex-col gap-5">
+          {!appointment && barbers && barbers.length > 1 ? (
+            <div>
+              <p className="mb-2 text-sm text-[#CBD5E1]">¿Quién lo atendió?</p>
+              <div className="flex flex-wrap gap-2">
+                {barbers.map((item) => (
+                  <button
+                    key={item.id}
+                    aria-pressed={memberId === item.id}
+                    className={`h-11 cursor-pointer rounded-xl border px-4 text-sm ${
+                      memberId === item.id ? "border-[#D97706] bg-[#D97706] font-semibold text-[#0F172A]" : "border-white/10 text-[#CBD5E1]"
+                    }`}
+                    onClick={() => setMemberId(item.id)}
+                    type="button"
+                  >
+                    {item.id === selfId ? `${item.name} (yo)` : item.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div>
             <p className="mb-2 text-sm text-[#CBD5E1]">¿Cómo pagó?</p>
             <div className="grid grid-cols-3 gap-2">

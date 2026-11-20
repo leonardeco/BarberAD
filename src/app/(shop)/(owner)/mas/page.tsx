@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight, Clock, Contact, Scissors, UserRound, Users } from "lucide-react";
+import { BarChart3, ChevronRight, HandCoins, Clock, Contact, Scissors, UserRound, Users } from "lucide-react";
 import { PageTitle, cardClass } from "@/components/ui";
 import { shopSlug } from "@/server/agenda";
 import { appUrl } from "@/server/mail";
@@ -10,6 +10,8 @@ import { CopyLink } from "@/components/copy-link";
 export const metadata = { title: "Más" };
 
 const items = [
+  { href: "/reportes", label: "Reportes", detail: "Ganancias por día, semana y mes", icon: BarChart3 },
+  { href: "/liquidar", label: "Liquidar comisiones", detail: "Lo que le debes a cada barbero", icon: HandCoins },
   { href: "/clientes", label: "Clientes", detail: "Historial, notas y WhatsApp", icon: Contact },
   { href: "/servicios", label: "Servicios", detail: "Tu carta y sus precios", icon: Scissors },
   { href: "/equipo", label: "Equipo", detail: "Barberos y comisiones", icon: Users },

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const shopPaths = ["/hoy", "/agenda", "/clientes", "/horarios", "/mas", "/cobrar", "/servicios", "/equipo", "/caja", "/cuenta"];
+const shopPaths = ["/hoy", "/agenda", "/clientes", "/horarios", "/mas", "/reportes", "/liquidar", "/cobrar", "/servicios", "/equipo", "/caja", "/cuenta"];
 
 export function middleware(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get("barberad_session"));
@@ -22,6 +22,8 @@ export const config = {
     "/clientes/:path*",
     "/horarios/:path*",
     "/mas/:path*",
+    "/reportes/:path*",
+    "/liquidar/:path*",
     "/cobrar/:path*",
     "/servicios/:path*",
     "/equipo/:path*",

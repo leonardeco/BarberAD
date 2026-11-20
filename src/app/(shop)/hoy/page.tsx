@@ -87,9 +87,14 @@ export default async function TodayPage() {
         ) : null}
       </section>
 
-      <section className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-3">
         {owner ? (
           <>
+            <Stat
+              label="Para la barbería"
+              value={formatCop(today.charged - today.commission)}
+              detail={<Link className="text-[#D97706]" href="/reportes">Ver reportes</Link>}
+            />
             <Stat label="Ticket promedio" value={formatCop(today.averageTicket)} />
             <Stat label="Comisiones" value={formatCop(today.commission)} detail="Lo que se le debe al equipo" />
             <Stat label="Efectivo en caja" value={formatCop(today.expectedCash)} detail="Cobros y propinas en efectivo" />

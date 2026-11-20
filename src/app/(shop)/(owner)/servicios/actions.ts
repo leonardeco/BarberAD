@@ -13,6 +13,7 @@ function readService(formData: FormData) {
     name: String(formData.get("name") ?? ""),
     durationMin: readInt(formData.get("durationMin")),
     listPrice: readPesos(formData.get("listPrice")),
+    commissionPercent: String(formData.get("commissionPercent") ?? "").trim() === "" ? null : readInt(formData.get("commissionPercent")),
   };
 }
 
