@@ -44,13 +44,14 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 - **Guía de inicio.** Al entrar, Hoy muestra cuatro pasos: armar la carta, cobrar el primer corte, sumar al equipo y completar los datos de la barbería. Se marcan solos y la guía desaparece cuando están todos, o antes si la oculta.
 - **Servicios.** Nombre, duración y precio en pesos enteros. Trae plantillas de un toque (corte clásico, fade, barba, corte + barba, infantil, cejas) y cada servicio se puede editar o desactivar.
 - **Equipo.** Cada barbero con su correo, una contraseña inicial y su porcentaje de comisión. Después puede cambiarle la comisión, que aplica desde el siguiente cobro, o ponerle una contraseña nueva si la olvidó.
-- **Hoy.** Lo cobrado por método de pago, el ticket promedio, las comisiones que se le deben al equipo, el efectivo que debe haber en la gaveta, los descuentos con su motivo y lo que hizo cada barbero.
+- **Hoy.** Las citas que faltan por atender, con botón para cobrarlas. Lo cobrado por método de pago, el ticket promedio, las comisiones que se le deben al equipo, el efectivo que debe haber en la gaveta, los descuentos con su motivo y lo que hizo cada barbero.
 - **Caja.** El efectivo esperado contra el contado, con lo que sobra o falta, y los últimos siete cierres. Cerrada, ese día no recibe otro cobro.
 - **Mi cuenta.** Teléfono y dirección de la barbería, y el cambio de contraseña.
 
 - **Agenda.** El día de cada barbero con sus citas, quién reservó en línea, botón de WhatsApp y cancelar. Desde ahí también se agenda a mano.
 - **Enlace de reservas.** Cada barbería tiene su página pública (`/r/nombre-de-la-barberia`): el cliente elige servicio, barbero o "con quien esté libre", día y hora, y deja su nombre y WhatsApp. Solo ve horas libres dentro del horario, y la base de datos impide que dos citas del mismo barbero se crucen. Un mismo número puede tener máximo 3 citas pendientes.
 - **Horarios.** Quién recibe citas y de qué hora a qué hora trabaja cada día. Los barberos nuevos arrancan de lunes a sábado, de 9:00 a 19:00; el dueño también, si al registrarse marca que atiende.
+- **De la cita al cobro.** Cada cita pasa de reservada a confirmada, en silla y atendida. "Terminar y cobrar" abre el cobro con el servicio, el barbero y el precio de la cita; al confirmar, la cita queda atendida y no se puede cobrar dos veces. Si el dueño cobra la cita de un barbero, el cobro y la comisión quedan a nombre del barbero. "No vino" se marca cuando ya pasó la hora. El botón de WhatsApp abre un mensaje listo para confirmar la cita.
 - **Clientes.** Se crean solos al reservar. Visitas, próxima cita, notas y WhatsApp.
 
 **El barbero**
@@ -119,7 +120,6 @@ Lo que hoy impide poner la app en un servidor:
 
 - **Anular un cobro.** Un cobro mal cargado (valor, servicio o método) hoy no tiene arreglo desde la app. Hace falta una anulación del dueño, con motivo, que quede registrada sin tocar el cobro original.
 - **Reabrir o cobrar tarde.** Cerrada la caja, ese día no admite más cobros hasta la medianoche. Un cliente que llega después del cierre no se puede cobrar.
-- **De la cita al cobro.** Marcar una cita como atendida y cobrarla desde ahí, o como "no vino" (fase 2).
 - **Historial.** Hoy solo muestra el día en curso. Faltan los días anteriores, la semana y el mes, y poder bajarlo a una hoja de cálculo.
 - **Reactivar a un barbero** desactivado. Su correo queda ocupado y no se puede volver a registrar.
 - **Cobrar sin señal.** Si se va la señal, el cobro no se guarda. La clave del cobro ya permite reintentar sin duplicar; falta guardarlo en el celular y enviarlo al volver.

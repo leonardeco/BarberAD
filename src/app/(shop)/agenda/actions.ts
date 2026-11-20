@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cancelAppointment, createStaffAppointment } from "@/server/agenda";
+import { cancelAppointment, createStaffAppointment, moveAppointment, type AppointmentStep } from "@/server/agenda";
 import { ShopError } from "@/server/errors";
 import { getShopContext } from "@/server/session";
 
@@ -37,4 +37,21 @@ export async function cancelAppointmentAction(formData: FormData) {
     if (!(error instanceof ShopError)) throw error;
   }
   revalidatePath("/agenda");
+}
+
+const steps = new Set<AppointmentStep>(["confirm", "start", "no_show"]);
+
+export async function moveAppointmentAction(formData: FormData) {
+  const ctx = await getShopContext();
+  if (!ctx) return;
+  const step = String(formData.get("step") ?? "") as AppointmentStep;
+  if (!steps.has(step)) return;
+  try {
+    await moveAppointment(ctx, String(formData.get("appointmentId") ?? ""), step);
+  } catch (error) {
+    if (!(error instanceof ShopError)) throw error;
+  }
+  revalidatePath("/agenda");
+  revalidatePath("/hoy");
+  revalidatePath("/clientes");
 }

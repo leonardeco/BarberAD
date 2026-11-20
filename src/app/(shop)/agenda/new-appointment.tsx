@@ -19,7 +19,7 @@ export function NewAppointment({
 }) {
   const [state, action, pending] = useActionState(createAppointmentAction, null);
   return (
-    <details className={`${cardClass} group mt-6 p-4`} open={state ? !state.ok : undefined}>
+    <details className={`${cardClass} group mt-6 p-4`}>
       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between font-semibold">
         Agendar una cita
         <span className="text-sm font-normal text-[#D97706] group-open:hidden">Abrir</span>

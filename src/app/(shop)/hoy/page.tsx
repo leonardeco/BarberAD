@@ -7,6 +7,7 @@ import { EmptyState, PageTitle, Stat, buttonClass, cardClass } from "@/component
 import { formatCop } from "@/server/money";
 import { getShopContext } from "@/server/session";
 import { guideStatus, listToday } from "@/server/shop";
+import { dayAgenda, timeLabel } from "@/server/agenda";
 
 export const metadata = { title: "Hoy" };
 
@@ -29,6 +30,10 @@ export default async function TodayPage() {
   const ctx = await getShopContext();
   if (!ctx) redirect("/salir");
   const [today, guide] = await Promise.all([listToday(ctx), guideStatus(ctx)]);
+  const agenda = await dayAgenda(ctx, today.day);
+  const pending = agenda.appointments.filter((item) => item.status === "booked");
+  const attended = agenda.appointments.filter((item) => item.status === "done").length;
+  const noShows = agenda.appointments.filter((item) => item.status === "no_show").length;
   const owner = ctx.role === "owner";
   const cuts = today.checkouts.length;
   const top = today.barbers[0]?.charged ?? 0;
@@ -101,6 +106,40 @@ export default async function TodayPage() {
           </>
         )}
       </section>
+
+      {agenda.appointments.length > 0 ? (
+        <section className="mt-8">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-semibold">Citas de hoy</h2>
+            <Link className="text-sm text-[#D97706]" href="/agenda">
+              Ver agenda
+            </Link>
+          </div>
+          <p className="mt-1 text-sm text-[#CBD5E1]">
+            {pending.length} por atender · {attended} atendidas{noShows ? ` · ${noShows} no vinieron` : ""}
+          </p>
+          {pending.length > 0 ? (
+            <ul className="mt-3 flex flex-col gap-2">
+              {pending.slice(0, 4).map((item) => (
+                <li key={item.id} className={`${cardClass} flex items-center gap-3 p-3`}>
+                  <span className="w-12 shrink-0 font-semibold tabular-nums">{timeLabel(item.startsAt, ctx.timezone)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{item.clientName}</span>
+                    <span className="block truncate text-sm text-[#94A3B8]">
+                      {item.serviceName}
+                      {owner ? ` · ${item.memberName}` : ""}
+                      {item.started ? " · en silla" : ""}
+                    </span>
+                  </span>
+                  <Link className={`${buttonClass.replace("w-full", "w-auto")} h-10 shrink-0 px-4 text-sm`} href={`/cobrar?cita=${item.id}`}>
+                    Cobrar
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       {owner && today.barbers.length > 0 ? (
         <section className="mt-8">

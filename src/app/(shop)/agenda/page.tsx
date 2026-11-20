@@ -1,23 +1,44 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarX, ChevronLeft, ChevronRight, MessageCircle, Plus } from "lucide-react";
+import { CalendarX, Check, ChevronLeft, ChevronRight, MessageCircle, Plus } from "lucide-react";
 import { RefreshToday } from "@/components/refresh-today";
 import { EmptyState, PageTitle, buttonClass, cardClass, quietButtonClass } from "@/components/ui";
 import { addDays, dayAgenda, dayLabel, isDay, shopToday, timeLabel, type AgendaAppointment } from "@/server/agenda";
 import { formatCop } from "@/server/money";
 import { getShopContext } from "@/server/session";
 import { listServices } from "@/server/shop";
-import { cancelAppointmentAction } from "./actions";
+import { cancelAppointmentAction, moveAppointmentAction } from "./actions";
 import { NewAppointment } from "./new-appointment";
 
 export const metadata = { title: "Agenda" };
 
-const statusLabel: Record<AgendaAppointment["status"], { text: string; className: string }> = {
+const statusLabel: Record<AgendaAppointment["status"] | "confirmed" | "started", { text: string; className: string }> = {
   booked: { text: "Reservada", className: "bg-[#1D4ED8]/30 text-[#BFDBFE]" },
+  confirmed: { text: "Confirmada", className: "bg-[#D97706]/20 text-[#FBBF24]" },
+  started: { text: "En silla", className: "bg-[#7C3AED]/30 text-[#DDD6FE]" },
   done: { text: "Atendida", className: "bg-[#14532D]/50 text-[#BBF7D0]" },
   cancelled: { text: "Cancelada", className: "bg-white/10 text-[#94A3B8]" },
   no_show: { text: "No vino", className: "bg-[#7F1D1D]/50 text-[#FECACA]" },
 };
+
+function statusOf(item: AgendaAppointment) {
+  if (item.status !== "booked") return statusLabel[item.status];
+  return statusLabel[item.started ? "started" : item.confirmed ? "confirmed" : "booked"];
+}
+
+function whatsapp(item: AgendaAppointment, shopName: string, timezone: string) {
+  const firstName = item.clientName.split(/\s+/)[0];
+  const when = new Date(item.startsAt).toLocaleString("es-CO", {
+    timeZone: timezone,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const text = `Hola ${firstName}, te esperamos en ${shopName} el ${when} para ${item.serviceName}. ¿Nos confirmas?`;
+  return `https://wa.me/${item.clientPhone}?text=${encodeURIComponent(text)}`;
+}
 
 function hm(minutes: number) {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
@@ -31,6 +52,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const [agenda, services] = await Promise.all([dayAgenda(ctx, day), listServices(ctx, true)]);
   const active = agenda.appointments.filter((item) => item.status !== "cancelled");
   const expected = active.filter((item) => item.status === "booked").reduce((sum, item) => sum + item.listPrice, 0);
+  const now = Date.now();
 
   return (
     <>
@@ -81,7 +103,8 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                 ) : (
                   <ul className="mt-2 flex flex-col gap-2">
                     {items.map((item) => {
-                      const status = statusLabel[item.status];
+                      const status = statusOf(item);
+                      const late = new Date(item.startsAt).getTime() <= now;
                       return (
                         <li
                           key={item.id}
@@ -98,22 +121,55 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                               {item.source === "public" ? " · reservó en línea" : ""}
                             </p>
                             {item.status === "booked" ? (
-                              <div className="mt-2 flex gap-2">
-                                <a
-                                  className={`${quietButtonClass} h-10 flex-1`}
-                                  href={`https://wa.me/${item.clientPhone}`}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                >
-                                  <MessageCircle aria-hidden="true" size={16} /> WhatsApp
-                                </a>
-                                <form action={cancelAppointmentAction} className="flex-1">
-                                  <input name="appointmentId" type="hidden" value={item.id} />
-                                  <button className={`${quietButtonClass} h-10 w-full`} type="submit">
-                                    Cancelar
-                                  </button>
-                                </form>
+                              <div className="mt-3 flex flex-col gap-2">
+                                <Link className={`${buttonClass} h-11`} href={`/cobrar?cita=${item.id}`}>
+                                  <Check aria-hidden="true" size={18} /> Terminar y cobrar
+                                </Link>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {item.started ? null : (
+                                    <form action={moveAppointmentAction}>
+                                      <input name="appointmentId" type="hidden" value={item.id} />
+                                      <input name="step" type="hidden" value={item.confirmed ? "start" : "confirm"} />
+                                      <button className={`${quietButtonClass} h-10 w-full`} type="submit">
+                                        {item.confirmed ? "Llegó, en silla" : "Marcar confirmada"}
+                                      </button>
+                                    </form>
+                                  )}
+                                  <a
+                                    className={`${quietButtonClass} h-10 ${item.started ? "col-span-2" : ""}`}
+                                    href={whatsapp(item, ctx.shopName, ctx.timezone)}
+                                    rel="noreferrer"
+                                    target="_blank"
+                                  >
+                                    <MessageCircle aria-hidden="true" size={16} /> WhatsApp
+                                  </a>
+                                </div>
+                                <details className="group">
+                                  <summary className="flex min-h-10 cursor-pointer list-none items-center text-sm text-[#94A3B8]">
+                                    <span className="group-open:hidden">Más opciones</span>
+                                    <span className="hidden group-open:inline">Cerrar</span>
+                                  </summary>
+                                  <div className="mt-1 grid grid-cols-2 gap-2">
+                                    {late && !item.started ? (
+                                      <form action={moveAppointmentAction}>
+                                        <input name="appointmentId" type="hidden" value={item.id} />
+                                        <input name="step" type="hidden" value="no_show" />
+                                        <button className={`${quietButtonClass} h-10 w-full`} type="submit">
+                                          No vino
+                                        </button>
+                                      </form>
+                                    ) : null}
+                                    <form action={cancelAppointmentAction}>
+                                      <input name="appointmentId" type="hidden" value={item.id} />
+                                      <button className={`${quietButtonClass} h-10 w-full`} type="submit">
+                                        Cancelar cita
+                                      </button>
+                                    </form>
+                                  </div>
+                                </details>
                               </div>
+                            ) : item.status === "done" && item.charged !== null ? (
+                              <p className="mt-1 text-sm text-[#BBF7D0]">Cobrada: {formatCop(item.charged)}</p>
                             ) : null}
                           </div>
                         </li>

@@ -224,6 +224,7 @@ export async function completeCheckout(
     tip: number;
     paymentMethod: string;
     clientKey: string;
+    appointmentId?: string | null;
   },
 ): Promise<CheckoutReceipt> {
   if (!methods.has(input.paymentMethod as PaymentMethod)) {
@@ -245,15 +246,51 @@ export async function completeCheckout(
       `;
       if (existing[0]) return existing[0];
 
-      const services = await tx<{ name: string; list_price: number }[]>`
-        select name, list_price
-        from services
-        where id = ${input.serviceId}::uuid and shop_id = ${ctx.shopId}::uuid and active
-      `;
-      const service = services[0];
+      // Por defecto cobra quien está en sesión, con su comisión. Si viene de una cita,
+      // el cobro es del barbero de la cita, al precio que tenía cuando se reservó.
+      let memberId = ctx.memberId;
+      let commissionPercent = ctx.commissionPercent;
+      let serviceId = input.serviceId;
+      let service: { name: string; list_price: number } | undefined;
+      const appointmentId = input.appointmentId || null;
+      if (appointmentId) {
+        if (!/^[0-9a-f-]{36}$/i.test(appointmentId)) throw new ShopError("Esa cita no existe.");
+        const rows = await tx<{
+          member_id: string;
+          service_id: string;
+          service_name: string;
+          list_price: number;
+          status: string;
+          commission_percent: number;
+        }[]>`
+          select a.member_id, a.service_id, a.service_name, a.list_price, a.status, m.commission_percent
+          from appointments a
+          join shop_members m on m.id = a.member_id
+          where a.id = ${appointmentId}::uuid and a.shop_id = ${ctx.shopId}::uuid
+          for update of a
+        `;
+        const appointment = rows[0];
+        if (!appointment) throw new ShopError("Esa cita no existe.");
+        if (appointment.status === "done") throw new ShopError("Esa cita ya se cobró.");
+        if (appointment.status !== "booked") throw new ShopError("Esa cita está cancelada o marcada como que no vino.");
+        if (ctx.role !== "owner" && appointment.member_id !== ctx.memberId) {
+          throw new ShopError("Esa cita es de otro barbero.");
+        }
+        memberId = appointment.member_id;
+        commissionPercent = appointment.commission_percent;
+        serviceId = appointment.service_id;
+        service = { name: appointment.service_name, list_price: appointment.list_price };
+      } else {
+        const services = await tx<{ name: string; list_price: number }[]>`
+          select name, list_price
+          from services
+          where id = ${input.serviceId}::uuid and shop_id = ${ctx.shopId}::uuid and active
+        `;
+        service = services[0];
+      }
       if (!service) throw new ShopError("Ese servicio no está disponible.");
       const money = deriveMoney(service.list_price, input.amount, input.reason);
-      const commission = commissionAmount(money.charged, ctx.commissionPercent);
+      const commission = commissionAmount(money.charged, commissionPercent);
       const day = await businessDate(tx, ctx);
       await tx`
         insert into cash_drawers (shop_id, business_date, status)
@@ -264,18 +301,24 @@ export async function completeCheckout(
         insert into checkouts (
           shop_id, member_id, service_id, service_name, business_date,
           list_price, extras, discount, discount_reason, charged, tip,
-          currency, payment_method, commission_percent, commission_amount, client_key
+          currency, payment_method, commission_percent, commission_amount, client_key, appointment_id
         ) values (
-          ${ctx.shopId}::uuid, ${ctx.memberId}::uuid, ${input.serviceId}::uuid,
+          ${ctx.shopId}::uuid, ${memberId}::uuid, ${serviceId}::uuid,
           ${service.name}, ${day}::date, ${money.listPrice}, ${money.extras},
           ${money.discount}, ${money.discountReason}, ${money.charged}, ${input.tip},
-          ${ctx.currency}, ${paymentMethod}, ${ctx.commissionPercent}, ${commission},
-          ${input.clientKey}::uuid
+          ${ctx.currency}, ${paymentMethod}, ${commissionPercent}, ${commission},
+          ${input.clientKey}::uuid, ${appointmentId}::uuid
         )
         returning id, service_name as "serviceName", charged, tip,
                   commission_amount as "commissionAmount",
                   payment_method as "paymentMethod"
       `;
+      if (appointmentId) {
+        await tx`
+          update appointments set status = 'done', closed_at = now()
+          where id = ${appointmentId}::uuid and shop_id = ${ctx.shopId}::uuid
+        `;
+      }
       return inserted[0];
     });
   } catch (error) {

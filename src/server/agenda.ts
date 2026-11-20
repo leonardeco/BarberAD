@@ -144,6 +144,9 @@ export type AgendaAppointment = {
   endsAt: string;
   status: "booked" | "done" | "cancelled" | "no_show";
   source: "public" | "staff";
+  confirmed: boolean;
+  started: boolean;
+  charged: number | null;
 };
 
 export type AgendaMember = { id: string; name: string; hours: { start: number; end: number }[] };
@@ -169,10 +172,13 @@ export async function dayAgenda(ctx: ShopContext, day: string) {
       select a.id, a.member_id as "memberId", m.display_name as "memberName",
              a.service_name as "serviceName", a.list_price as "listPrice",
              c.name as "clientName", c.phone as "clientPhone",
-             a.starts_at as "startsAt", a.ends_at as "endsAt", a.status, a.source
+             a.starts_at as "startsAt", a.ends_at as "endsAt", a.status, a.source,
+             (a.confirmed_at is not null) as confirmed, (a.started_at is not null) as started,
+             k.charged + k.tip as charged
       from appointments a
       join shop_members m on m.id = a.member_id
       join clients c on c.id = a.client_id
+      left join checkouts k on k.appointment_id = a.id
       join shops s on s.id = a.shop_id
       where a.shop_id = ${ctx.shopId}::uuid
         and (a.starts_at at time zone s.timezone)::date = ${day}::date
@@ -247,6 +253,69 @@ export async function cancelAppointment(ctx: ShopContext, appointmentId: string)
     returning id
   `);
   if (!rows[0]) throw new ShopError("Esa cita ya no se puede cancelar.");
+}
+
+export type AppointmentStep = "confirm" | "start" | "no_show";
+
+// Avanza una cita reservada: confirmar, sentar en la silla o marcar que no vino.
+export async function moveAppointment(ctx: ShopContext, appointmentId: string, step: AppointmentStep) {
+  if (!isUuid(appointmentId)) throw new ShopError("Esa cita no existe.");
+  const rows = await withShop(ctx, (tx) => {
+    if (step === "confirm") {
+      return tx`
+        update appointments set confirmed_at = coalesce(confirmed_at, now())
+        where id = ${appointmentId}::uuid and shop_id = ${ctx.shopId}::uuid and status = 'booked'
+        returning id
+      `;
+    }
+    if (step === "start") {
+      return tx`
+        update appointments set started_at = coalesce(started_at, now()), confirmed_at = coalesce(confirmed_at, now())
+        where id = ${appointmentId}::uuid and shop_id = ${ctx.shopId}::uuid and status = 'booked'
+        returning id
+      `;
+    }
+    return tx`
+      update appointments set status = 'no_show', closed_at = now()
+      where id = ${appointmentId}::uuid and shop_id = ${ctx.shopId}::uuid
+        and status = 'booked' and started_at is null and starts_at <= now()
+      returning id
+    `;
+  });
+  if (!rows[0]) {
+    throw new ShopError(
+      step === "no_show" ? "Solo se marca \"no vino\" cuando ya pasó la hora y no se sentó." : "Esa cita ya no está pendiente.",
+    );
+  }
+}
+
+export type CheckoutAppointment = {
+  id: string;
+  clientName: string;
+  memberName: string;
+  serviceId: string;
+  serviceName: string;
+  listPrice: number;
+  durationMin: number;
+  time: string;
+};
+
+export async function appointmentForCheckout(ctx: ShopContext, appointmentId: string) {
+  if (!isUuid(appointmentId)) return null;
+  const rows = await withShop(ctx, (tx) => tx<(Omit<CheckoutAppointment, "time"> & { startsAt: Date })[]>`
+    select a.id, c.name as "clientName", m.display_name as "memberName", a.service_id as "serviceId",
+           a.service_name as "serviceName", a.list_price as "listPrice",
+           (extract(epoch from a.ends_at - a.starts_at) / 60)::int as "durationMin",
+           a.starts_at as "startsAt"
+    from appointments a
+    join clients c on c.id = a.client_id
+    join shop_members m on m.id = a.member_id
+    where a.id = ${appointmentId}::uuid and a.shop_id = ${ctx.shopId}::uuid and a.status = 'booked'
+  `);
+  const row = rows[0];
+  if (!row) return null;
+  const { startsAt, ...rest } = row;
+  return { ...rest, time: timeLabel(startsAt, ctx.timezone) };
 }
 
 // ---------- Horarios ----------

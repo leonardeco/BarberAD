@@ -18,10 +18,12 @@ const methods = [
 const tipOptions = [0, 2000, 5000, 10000];
 const stepNames = ["Servicio", "Monto", "Pago"];
 
-export function CheckoutForm({ services }: { services: Service[] }) {
+type FromAppointment = { id: string; clientName: string; memberName: string; time: string };
+
+export function CheckoutForm({ services, appointment }: { services: Service[]; appointment?: FromAppointment }) {
   const router = useRouter();
   const [clientKey, setClientKey] = useState(() => crypto.randomUUID());
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(appointment ? 2 : 1);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const service = services.find((item) => item.id === serviceId) ?? services[0];
   const [amount, setAmount] = useState(String(service?.listPrice ?? ""));
@@ -73,13 +75,15 @@ export function CheckoutForm({ services }: { services: Service[] }) {
         tip: tip === "" ? 0 : Number(tip),
         paymentMethod: method,
         clientKey,
+        appointmentId: appointment?.id ?? null,
       });
       if (!result.ok) {
         setMessage(result.message);
         return;
       }
       setReceipt(result.receipt);
-      router.refresh();
+      // Recargar esta página con una cita ya cobrada la mandaría a la agenda y se perdería el recibo.
+      if (!appointment) router.refresh();
     } catch {
       // Sin señal el celular no llega al servidor. La misma clave de cobro se reenvía al
       // reintentar, así que si el primer intento sí llegó no se cobra dos veces.
@@ -108,9 +112,15 @@ export function CheckoutForm({ services }: { services: Service[] }) {
           </div>
         </dl>
         <div className="mt-6 flex flex-col gap-2">
-          <button className={buttonClass} onClick={startOver} type="button">
-            Cobrar otro corte
-          </button>
+          {appointment ? (
+            <button className={buttonClass} onClick={() => router.push("/agenda")} type="button">
+              Volver a la agenda
+            </button>
+          ) : (
+            <button className={buttonClass} onClick={startOver} type="button">
+              Cobrar otro corte
+            </button>
+          )}
           <button className={`${quietButtonClass} w-full`} onClick={() => router.push("/hoy")} type="button">
             Ver el día
           </button>
@@ -122,7 +132,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
-        {step > 1 ? (
+        {step > (appointment ? 2 : 1) ? (
           <button
             aria-label="Volver"
             className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-white/10 text-[#CBD5E1]"
@@ -168,6 +178,11 @@ export function CheckoutForm({ services }: { services: Service[] }) {
       {step === 2 ? (
         <div className="flex flex-col gap-4">
           <div className={`${cardClass} p-4`}>
+            {appointment ? (
+              <p className="mb-1 text-sm text-[#BFDBFE]">
+                Cita de las {appointment.time} · {appointment.clientName} con {appointment.memberName}
+              </p>
+            ) : null}
             <p className="font-medium">{service.name}</p>
             <p className="text-sm text-[#94A3B8]">Precio de lista {formatCop(service.listPrice)}</p>
           </div>

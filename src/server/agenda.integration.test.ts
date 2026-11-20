@@ -133,3 +133,84 @@ test("agenda: horas libres, reservas sin cruces y cada uno ve lo suyo", async ()
     /después de la de entrada/,
   );
 });
+
+test("de la cita al cobro: una sola vez, a nombre del barbero de la cita", async () => {
+  const { ensureLocalPostgres } = await import("./local-postgres.ts");
+  const { migrate } = await import("./migrate.ts");
+  await ensureLocalPostgres();
+  await migrate("barberad_test", { fresh: true });
+
+  const auth = await import("./auth.ts");
+  const shop = await import("./shop.ts");
+  const agenda = await import("./agenda.ts");
+  const { appDb } = await import("./db.ts");
+
+  const owner = await auth.createOwnerAccount({
+    email: "dueno@cobro.local",
+    password: "clave-segura",
+    ownerName: "Ana",
+    shopName: "Navaja",
+    takesAppointments: true,
+  });
+  await auth.addBarberAccount(owner, { email: "camilo@cobro.local", password: "clave-segura", displayName: "Camilo", commissionPercent: 50 });
+  const [found] = await appDb()<{ id: string }[]>`select user_id as id from app_find_user_by_email('camilo@cobro.local')`;
+  const barber = (await auth.contextForUser(found.id))!;
+  await shop.createService(owner, { name: "Corte", durationMin: 30, listPrice: 20000 });
+  const [service] = await shop.listServices(owner, true);
+
+  const today = await agenda.shopToday(owner);
+  const tomorrow = agenda.addDays(today, 1);
+  const yesterday = agenda.addDays(today, -1);
+  const mk = (ctx: typeof owner, memberId: string, day: string, time: string, name: string, phone: string) =>
+    agenda.createStaffAppointment(ctx, { memberId, serviceId: service.id, day, time, clientName: name, phone });
+  await mk(barber, barber.memberId, tomorrow, "10:00", "Luis", "3001110001");
+  await mk(owner, barber.memberId, tomorrow, "11:00", "Pedro", "3001110002");
+  await mk(owner, owner.memberId, tomorrow, "10:00", "Juan", "3001110003");
+  await mk(barber, barber.memberId, yesterday, "10:00", "Sofía", "3001110004");
+
+  // El precio de la cita queda fijo aunque cambie la carta.
+  await shop.updateService(owner, service.id, { name: "Corte", durationMin: 30, listPrice: 30000 });
+
+  const day = await agenda.dayAgenda(owner, tomorrow);
+  const [luis, juan, pedro] = ["Luis", "Juan", "Pedro"].map((n) => day.appointments.find((a) => a.clientName === n)!);
+  const sofia = (await agenda.dayAgenda(owner, yesterday)).appointments[0];
+
+  await agenda.moveAppointment(barber, luis.id, "confirm");
+  await agenda.moveAppointment(barber, luis.id, "start");
+  await assert.rejects(() => agenda.moveAppointment(barber, luis.id, "no_show"), /ya pasó la hora/);
+
+  const pre = await agenda.appointmentForCheckout(barber, luis.id);
+  assert.equal(pre?.listPrice, 20000);
+  assert.equal(pre?.memberName, "Camilo");
+
+  const key = crypto.randomUUID();
+  const pay = (ctx: typeof owner, appointmentId: string, clientKey = crypto.randomUUID(), amount = 20000) =>
+    shop.completeCheckout(ctx, { serviceId: service.id, amount, reason: "", tip: 0, paymentMethod: "cash", clientKey, appointmentId });
+  const receipt = await pay(barber, luis.id, key, 25000);
+  assert.equal(receipt.charged, 25000);
+  assert.equal(receipt.commissionAmount, 12500);
+  assert.equal((await pay(barber, luis.id, key, 25000)).id, receipt.id, "reintentar con la misma clave no cobra dos veces");
+  await assert.rejects(() => pay(barber, luis.id), /ya se cobró/);
+  assert.equal(await agenda.appointmentForCheckout(barber, luis.id), null);
+
+  // El barbero no ve ni cobra la cita de la dueña.
+  await assert.rejects(() => pay(barber, juan.id), /no existe/);
+
+  // La dueña cobra la cita de Camilo: el cobro y la comisión son de Camilo, no del 100% de la dueña.
+  const forCamilo = await pay(owner, pedro.id);
+  assert.equal(forCamilo.commissionAmount, 10000);
+
+  // "No vino" solo cuando ya pasó la hora; después ya no se cobra.
+  await agenda.moveAppointment(barber, sofia.id, "no_show");
+  await assert.rejects(() => pay(barber, sofia.id), /no vino/);
+
+  const after = await agenda.dayAgenda(owner, tomorrow);
+  assert.equal(after.appointments.find((a) => a.id === luis.id)?.status, "done");
+  assert.equal(after.appointments.find((a) => a.id === luis.id)?.charged, 25000);
+  const todayTotals = await shop.listToday(owner);
+  assert.equal(todayTotals.charged, 45000);
+  assert.equal(todayTotals.commission, 22500);
+  assert.deepEqual(todayTotals.barbers.map((b) => b.name), ["Camilo"]);
+  const clients = await agenda.listClients(owner, "Sofía");
+  assert.equal(clients[0].noShows, 1);
+});
