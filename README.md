@@ -49,6 +49,7 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 - **Liquidar comisiones.** Lo que se le debe a cada barbero desde su último pago: comisión más propinas, que entraron a la caja. Al marcarlo como pagado queda registrado con los cobros exactos que cubre; un cobro no se paga dos veces y uno que entre mientras se liquida queda para el siguiente pago.
 - **Comisión por servicio.** Opcional: por ejemplo 50% en cortes y 30% en barba. Si el servicio no la tiene, se usa la del barbero.
 - **Cobrar a nombre de un barbero.** El dueño elige quién atendió; el cobro y la comisión quedan a nombre de ese barbero.
+- **Anular un cobro.** Si se cobró mal, el dueño lo anula desde Hoy con un motivo. El cobro no se borra: queda tachado en "Anulados hoy" y deja de contar en la caja, los reportes y la liquidación. Si venía de una cita, la cita vuelve a quedar por cobrar. No se puede anular con la caja de ese día cerrada ni si la comisión ya se le pagó al barbero.
 - **Caja.** El efectivo esperado contra el contado, con lo que sobra o falta, y los últimos siete cierres. Cerrada, ese día no recibe otro cobro.
 - **Mi cuenta.** Teléfono y dirección de la barbería, y el cambio de contraseña.
 
@@ -90,7 +91,7 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 | `SESSION_SECRET` | Secreto con el que se guarda la sesión. |
 | `APP_URL` | Dirección pública de la app, para armar el enlace de recuperación. |
 
-Todavía no hay proveedor de correo. En local, el enlace para recuperar la contraseña sale en la consola donde corre `npm run dev`.
+En local, sin `RESEND_API_KEY`, el enlace para recuperar la contraseña sale en la consola donde corre `npm run dev`.
 
 ## Comandos
 
@@ -101,7 +102,7 @@ Todavía no hay proveedor de correo. En local, el enlace para recuperar la contr
 | `npm run typecheck` | Revisa los tipos de todo el proyecto, pruebas incluidas. |
 | `npm run db:migrate` | Aplica las migraciones pendientes sobre `barberad`. |
 | `npm run build` | Compila. |
-| `npm start` | Sirve la compilación. No enciende Postgres: para trabajar, usa `npm run dev`. |
+| `npm start` | Sirve la compilación, como en producción: exige un `SESSION_SECRET` propio. No enciende Postgres: para trabajar, usa `npm run dev`. |
 
 Las migraciones viven en `db/migrations/` y se aplican en orden. Cada una corre una sola vez.
 
@@ -113,25 +114,49 @@ El Postgres embebido no corre como `root` (es lo normal dentro de un contenedor 
 
 Un cobro, un precio o una propina pueden llegar hasta $10.000.000; el efectivo contado al cerrar, hasta $1.000.000.000. Los nombres, hasta 80 caracteres; el motivo de un descuento, hasta 120; la contraseña, entre 8 y 200.
 
-## Antes de publicar
+## Publicar
 
-Lo que hoy impide poner la app en un servidor:
+La app corre en cualquier sitio que sirva Next.js (Vercel, Railway, Render, un VPS) con un Postgres administrado. Este es el camino con Vercel y Neon:
 
-- **Base de datos.** La app solo se conecta a un Postgres local (`127.0.0.1`, bases `barberad` y `barberad_test`). Falta leer una `DATABASE_URL` y apuntar a un Postgres administrado.
-- **Secretos.** `.env.example` se lee como valores por defecto, incluido `SESSION_SECRET`. En producción debe fallar si no se define uno propio.
-- **Correo.** Sin proveedor de correo, recuperar la contraseña no funciona en producción (el enlace solo sale en la consola).
-- **Intentos de entrada.** No hay límite de intentos en entrar ni en pedir enlaces de recuperación.
-- **Copias de seguridad** y monitoreo de errores.
+1. **Base de datos.** Crea un proyecto en [Neon](https://neon.tech) y copia la cadena de conexión del dueño de la base (la que trae `neondb_owner`). Esa es `DATABASE_ADMIN_URL`.
+2. **Migrar.** Desde tu máquina, una vez y después de cada actualización:
+   ```bash
+   DATABASE_ADMIN_URL="postgresql://neondb_owner:…@…neon.tech/neondb?sslmode=require" \
+   PG_APP_PASSWORD="una-clave-larga-para-la-app" \
+   npm run db:migrate
+   ```
+   Crea el rol `barberad_app`, con el que entra la app y que no puede saltarse la seguridad por filas, y aplica las migraciones que falten.
+3. **Correo.** Crea una cuenta en [Resend](https://resend.com), verifica tu dominio y copia la clave de la API.
+4. **Vercel.** Importa el repositorio y define las variables de abajo. La app usa la misma `DATABASE_ADMIN_URL` para saber a qué servidor ir, pero entra con `barberad_app`. Si usas el host con `-pooler` de Neon, se ajusta solo.
+
+| Variable | Para qué sirve |
+| --- | --- |
+| `DATABASE_ADMIN_URL` | Cadena de conexión del dueño de la base. Con ella se migra y de ella sale el servidor al que entra la app. |
+| `PG_APP_PASSWORD` | Clave del rol `barberad_app`. La misma con la que migraste. |
+| `DATABASE_URL` | Opcional: la cadena completa con la que entra la app, si prefieres darla tú. |
+| `SESSION_SECRET` | Obligatorio en producción: al menos 32 caracteres. Sácalo con `openssl rand -base64 48`. Con el de ejemplo, la app no arranca. |
+| `APP_URL` | La dirección pública, por ejemplo `https://barberad.co`. Arma los enlaces de reservas, de citas y de recuperación. |
+| `RESEND_API_KEY` | Clave de Resend para enviar el correo de recuperación. |
+| `MAIL_FROM` | Remitente, por ejemplo `BarberAD <hola@barberad.co>`, con un dominio verificado en Resend. |
+| `PG_MAX` | Opcional: conexiones por instancia. Por defecto 3 con base remota. |
+
+**Lo que ya protege la app en producción**
+
+- Límite de intentos: 5 fallos de un correo o 30 desde una IP en 15 minutos bloquean la entrada por un rato; los enlaces de recuperación se limitan a 3 por correo por hora, y las reservas a 15 por IP por hora.
+- La sesión y los enlaces viajan solo por HTTPS, y los enlaces con token no se filtran como referrer.
+
+**Lo que falta**
+
+- Copias de seguridad: Neon guarda historial para restaurar; revisa cuántos días incluye tu plan.
+- Monitoreo de errores (por ejemplo, Sentry).
 
 ## Lo que sigue
 
-- **Anular un cobro.** Un cobro mal cargado (valor, servicio o método) hoy no tiene arreglo desde la app. Hace falta una anulación del dueño, con motivo, que quede registrada sin tocar el cobro original.
 - **Reabrir o cobrar tarde.** Cerrada la caja, ese día no admite más cobros hasta la medianoche. Un cliente que llega después del cierre no se puede cobrar.
 - **Reactivar a un barbero** desactivado. Su correo queda ocupado y no se puede volver a registrar.
 - **Cobrar sin señal.** Si se va la señal, el cobro no se guarda. La clave del cobro ya permite reintentar sin duplicar; falta guardarlo en el celular y enviarlo al volver.
 - **Gastos** (arriendo, productos) para ver la utilidad neta del mes.
 - **Instalación en el celular.** El ícono es solo SVG; faltan PNG de 192 y 512 px y el ícono de Apple.
 - **Política de tratamiento de datos** (Ley 1581).
-- Agenda con reservas desde un enlace público.
 - Envío automático de los recordatorios con la API de WhatsApp Business (hoy los envía el barbero con un toque).
 - Planes y cobro de la suscripción.

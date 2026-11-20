@@ -2,6 +2,8 @@
 
 import { bookPublic, freeSlots, publicShop, type Slot } from "@/server/agenda";
 import { ShopError } from "@/server/errors";
+import { clientIp } from "@/server/session";
+import { isBlocked, recordAttempt } from "@/server/throttle";
 
 export async function slotsAction(input: {
   slug: string;
@@ -26,6 +28,12 @@ export async function bookAction(input: {
   name: string;
   phone: string;
 }): Promise<BookResult> {
+  const ip = await clientIp();
+  const phoneKey = input.phone.replace(/\D/g, "");
+  if (await isBlocked("book", phoneKey, ip)) {
+    return { ok: false, message: "Hiciste muchos intentos de reserva. Espera un rato o escríbele a la barbería." };
+  }
+  await recordAttempt("book", phoneKey, ip);
   try {
     const result = await bookPublic(input);
     return { ok: true, memberName: result.memberName, startsAt: result.startsAt, token: result.token };

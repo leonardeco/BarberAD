@@ -386,7 +386,7 @@ export async function listToday(ctx: ShopContext) {
              to_char(c.completed_at at time zone s.timezone, 'HH24:MI') as time,
              m.display_name as "barberName",
              (m.role = 'owner') as "isOwner"
-      from checkouts c
+      from live_checkouts c
       join shop_members m on m.id = c.member_id
       join shops s on s.id = c.shop_id
       where c.shop_id = ${ctx.shopId}::uuid and c.business_date = ${day}::date
@@ -418,8 +418,19 @@ export async function listToday(ctx: ShopContext) {
       barber.tips += row.tip;
       barbers.set(row.memberId, barber);
     }
+    const voided = await tx<{ id: string; serviceName: string; charged: number; tip: number; barberName: string; reason: string; time: string }[]>`
+      select c.id, c.service_name as "serviceName", c.charged, c.tip, m.display_name as "barberName",
+             v.reason, to_char(c.completed_at at time zone s.timezone, 'HH24:MI') as time
+      from checkouts c
+      join checkout_voids v on v.checkout_id = c.id
+      join shop_members m on m.id = c.member_id
+      join shops s on s.id = c.shop_id
+      where c.shop_id = ${ctx.shopId}::uuid and c.business_date = ${day}::date
+      order by c.completed_at desc
+    `;
     return {
       day,
+      voided,
       drawerStatus: drawer[0]?.status ?? "open",
       checkouts,
       expectedCash: byMethod.cash,
@@ -501,11 +512,55 @@ export async function closeDrawer(ctx: ShopContext, countedCash: number) {
 async function listInside(tx: ShopTx, ctx: ShopContext, day: string) {
   const checkouts = await tx<{ charged: number; tip: number; payment_method: PaymentMethod }[]>`
     select charged, tip, payment_method
-    from checkouts
+    from live_checkouts
     where shop_id = ${ctx.shopId}::uuid and business_date = ${day}::date
   `;
   const expectedCash = checkouts
     .filter((row) => row.payment_method === "cash")
     .reduce((sum, row) => sum + row.charged + row.tip, 0);
   return { expectedCash };
+}
+
+// Anula un cobro sin borrarlo: queda registrado aparte, con motivo y quién lo anuló, y deja de contar en la caja,
+// los reportes y la liquidación. Si venía de una cita, la cita vuelve a quedar por cobrar.
+export async function voidCheckout(ctx: ShopContext, checkoutId: string, reason: string) {
+  if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede anular un cobro.");
+  if (!/^[0-9a-f-]{36}$/i.test(checkoutId)) throw new ShopError("Ese cobro no existe.");
+  const why = reason.trim();
+  if (!why) throw new ShopError("Escribe por qué lo anulas.");
+  if (why.length > 120) throw new ShopError("El motivo es demasiado largo (máximo 120 caracteres).");
+  try {
+    await withShop(ctx, async (tx) => {
+      const rows = await tx<{ member_id: string; business_date: string; appointment_id: string | null }[]>`
+        select member_id, business_date::text as business_date, appointment_id
+        from checkouts where id = ${checkoutId}::uuid and shop_id = ${ctx.shopId}::uuid
+      `;
+      const checkout = rows[0];
+      if (!checkout) throw new ShopError("Ese cobro no existe.");
+      // Mismos candados que el cierre de caja y la liquidación, para no cruzarse con ellos.
+      await tx`select id from shop_members where id = ${checkout.member_id}::uuid for update`;
+      const drawer = await tx<{ status: string }[]>`
+        select status from cash_drawers
+        where shop_id = ${ctx.shopId}::uuid and business_date = ${checkout.business_date}::date
+        for update
+      `;
+      if (drawer[0]?.status === "closed") throw new ShopError("La caja de ese día ya se cerró; no se puede anular.");
+      const already = await tx`select 1 from checkout_voids where checkout_id = ${checkoutId}::uuid`;
+      if (already.length) throw new ShopError("Ese cobro ya estaba anulado.");
+      const paid = await tx`select 1 from payout_items where checkout_id = ${checkoutId}::uuid`;
+      if (paid.length) throw new ShopError("La comisión de ese cobro ya se le pagó al barbero; no se puede anular.");
+      await tx`
+        insert into checkout_voids (checkout_id, shop_id, reason, voided_by_member_id)
+        values (${checkoutId}::uuid, ${ctx.shopId}::uuid, ${why}, ${ctx.memberId}::uuid)
+      `;
+      if (checkout.appointment_id) {
+        await tx`
+          update appointments set status = 'booked', closed_at = null
+          where id = ${checkout.appointment_id}::uuid and shop_id = ${ctx.shopId}::uuid and status = 'done'
+        `;
+      }
+    });
+  } catch (error) {
+    guard(error);
+  }
 }

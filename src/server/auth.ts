@@ -1,5 +1,6 @@
 import { slugify } from "./agenda";
 import { appDb } from "./db";
+import { clearAttempts, isBlocked, recordAttempt } from "./throttle";
 import { ShopError, messageFromDatabase } from "./errors";
 import { hashPassword, verifyPassword } from "./password";
 import type { ShopContext } from "./types";
@@ -195,19 +196,26 @@ export async function memberEmails(ctx: ShopContext) {
 // para que la demora no delate qué correos tienen cuenta.
 let decoyHash: Promise<string> | null = null;
 
-export async function authenticate(email: string, password: string) {
+export async function authenticate(email: string, password: string, ip = "local") {
+  const key = normalizeEmail(email);
+  if (await isBlocked("login", key, ip)) {
+    throw new ShopError("Demasiados intentos fallidos. Espera 15 minutos o recupera tu contraseña.");
+  }
   const rows = await appDb()<{ user_id: string; password_hash: string }[]>`
-    select * from app_find_user_by_email(${normalizeEmail(email)})
+    select * from app_find_user_by_email(${key})
   `;
   const user = rows[0];
   if (!user) {
     decoyHash ??= hashPassword("barberad-decoy");
     await verifyPassword(password.slice(0, 200), await decoyHash);
+    await recordAttempt("login", key, ip);
     throw new ShopError("Correo o contraseña incorrectos.");
   }
   if (!(await verifyPassword(password.slice(0, 200), user.password_hash))) {
+    await recordAttempt("login", key, ip);
     throw new ShopError("Correo o contraseña incorrectos.");
   }
+  await clearAttempts("login", key);
   const member = await membershipFor(user.user_id);
   if (!member) throw new ShopError("Tu acceso a la barbería está inactivo.");
   return toContext(user.user_id, member);

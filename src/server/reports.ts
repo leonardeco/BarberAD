@@ -80,7 +80,7 @@ export async function shopReport(ctx: ShopContext, from: string, to: string): Pr
              coalesce(sum(c.tip), 0)::int as tips,
              coalesce(sum(c.commission_amount) filter (where m.role = 'barber'), 0)::int as team,
              count(*) filter (where c.discount > 0)::int as discounts
-      from checkouts c
+      from live_checkouts c
       join shop_members m on m.id = c.member_id
       where c.shop_id = ${ctx.shopId}::uuid and c.business_date between ${a}::date and ${b}::date
     `;
@@ -88,7 +88,7 @@ export async function shopReport(ctx: ShopContext, from: string, to: string): Pr
 
     const methods = await tx<{ method: "cash" | "transfer" | "card"; total: number }[]>`
       select payment_method as method, coalesce(sum(charged + tip), 0)::int as total
-      from checkouts
+      from live_checkouts
       where shop_id = ${ctx.shopId}::uuid and business_date between ${from}::date and ${to}::date
       group by payment_method
     `;
@@ -101,7 +101,7 @@ export async function shopReport(ctx: ShopContext, from: string, to: string): Pr
       ), sales as (
         select c.member_id, count(*)::int as cuts, sum(c.charged)::int as charged,
                sum(c.commission_amount)::int as commission, sum(c.tip)::int as tips
-        from checkouts c
+        from live_checkouts c
         where c.shop_id = ${ctx.shopId}::uuid and c.business_date between ${from}::date and ${to}::date
         group by c.member_id
       ), available as (
@@ -132,7 +132,7 @@ export async function shopReport(ctx: ShopContext, from: string, to: string): Pr
 
     const byService = await tx<{ name: string; cuts: number; charged: number }[]>`
       select service_name as name, count(*)::int as cuts, sum(charged)::int as charged
-      from checkouts
+      from live_checkouts
       where shop_id = ${ctx.shopId}::uuid and business_date between ${from}::date and ${to}::date
       group by service_name
       order by sum(charged) desc, service_name
@@ -144,7 +144,7 @@ export async function shopReport(ctx: ShopContext, from: string, to: string): Pr
              coalesce(sum(c.charged), 0)::int as charged,
              coalesce(sum(c.commission_amount) filter (where m.role = 'barber'), 0)::int as team
       from generate_series(${from}::date, ${to}::date, interval '1 day') d
-      left join checkouts c on c.shop_id = ${ctx.shopId}::uuid and c.business_date = d::date
+      left join live_checkouts c on c.shop_id = ${ctx.shopId}::uuid and c.business_date = d::date
       left join shop_members m on m.id = c.member_id
       group by d
       order by d
@@ -213,7 +213,7 @@ export async function pendingPayouts(ctx: ShopContext) {
            min(c.business_date)::text as "from",
            max(c.business_date)::text as "to"
     from shop_members m
-    left join checkouts c on c.member_id = m.id
+    left join live_checkouts c on c.member_id = m.id
       and not exists (select 1 from payout_items p where p.checkout_id = c.id)
     where m.shop_id = ${ctx.shopId}::uuid and m.role = 'barber'
     group by m.id
@@ -251,7 +251,7 @@ export async function payBarber(ctx: ShopContext, memberId: string) {
       if (!members[0]) throw new ShopError("Ese barbero no existe.");
       const rows = await tx<{ id: string; business_date: string; commission_amount: number; tip: number }[]>`
         select c.id, c.business_date::text as business_date, c.commission_amount, c.tip
-        from checkouts c
+        from live_checkouts c
         where c.member_id = ${memberId}::uuid and c.shop_id = ${ctx.shopId}::uuid
           and not exists (select 1 from payout_items p where p.checkout_id = c.id)
         order by c.completed_at

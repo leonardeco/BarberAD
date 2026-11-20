@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeftRight, Banknote, CreditCard, Plus, Scissors } from "lucide-react";
 import { Guide } from "@/components/guide";
 import { RefreshToday } from "@/components/refresh-today";
+import { VoidForm } from "./void-form";
 import { EmptyState, PageTitle, Stat, buttonClass, cardClass } from "@/components/ui";
 import { formatCop } from "@/server/money";
 import { getShopContext } from "@/server/session";
@@ -226,6 +227,7 @@ export default async function TodayPage() {
                     {cut.isOwner ? null : (
                       <p className="mt-1 text-xs text-[#94A3B8]">Comisión {formatCop(cut.commissionAmount)}</p>
                     )}
+                    {owner && today.drawerStatus === "open" ? <VoidForm checkoutId={cut.id} /> : null}
                   </div>
                 </li>
               );
@@ -233,6 +235,26 @@ export default async function TodayPage() {
           </ul>
         )}
       </section>
+
+      {today.voided.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold">Anulados hoy</h2>
+          <ul className="mt-3 flex flex-col gap-2">
+            {today.voided.map((cut) => (
+              <li key={cut.id} className={`${cardClass} p-4 opacity-70`}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="truncate font-medium line-through">{cut.serviceName}</p>
+                  <p className="tabular-nums line-through">{formatCop(cut.charged + cut.tip)}</p>
+                </div>
+                <p className="text-sm text-[#CBD5E1]">
+                  {cut.time}
+                  {owner ? ` · ${cut.barberName}` : ""} · {cut.reason}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </>
   );
 }

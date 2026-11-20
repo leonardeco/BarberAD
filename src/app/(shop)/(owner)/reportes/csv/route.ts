@@ -27,7 +27,7 @@ export async function GET(request: Request) {
            m.display_name as barber, m.role, c.service_name as service, c.list_price, c.discount,
            c.discount_reason as reason, c.charged, c.tip, c.payment_method as method,
            c.commission_percent as pct, c.commission_amount as commission
-    from checkouts c
+    from live_checkouts c
     join shop_members m on m.id = c.member_id
     join shops s on s.id = c.shop_id
     where c.shop_id = ${ctx.shopId}::uuid and c.business_date between ${from}::date and ${to}::date

@@ -180,7 +180,7 @@ export async function dayAgenda(ctx: ShopContext, day: string) {
       from appointments a
       join shop_members m on m.id = a.member_id
       join clients c on c.id = a.client_id
-      left join checkouts k on k.appointment_id = a.id
+      left join live_checkouts k on k.appointment_id = a.id
       join shops s on s.id = a.shop_id
       where a.shop_id = ${ctx.shopId}::uuid
         and (a.starts_at at time zone s.timezone)::date = ${day}::date

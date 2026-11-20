@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import { appUrl } from "./database-url";
+import { appUrl, connectionOptions } from "./database-url";
 import type { ShopContext } from "./types";
 
 let connection: ReturnType<typeof postgres> | null = null;
@@ -9,7 +9,7 @@ export function appDb() {
   const url = appUrl();
   if (!connection || connectionUrl !== url) {
     if (connection) void connection.end({ timeout: 1 });
-    connection = postgres(url, { max: 10 });
+    connection = postgres(url, connectionOptions(url));
     connectionUrl = url;
   }
   return connection;
