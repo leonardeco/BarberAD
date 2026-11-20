@@ -37,11 +37,14 @@ export async function updateProfileAction(_prev: AccountState, formData: FormDat
       name: String(formData.get("name") ?? ""),
       phone: String(formData.get("phone") ?? ""),
       address: String(formData.get("address") ?? ""),
+      about: String(formData.get("about") ?? ""),
+      instagram: String(formData.get("instagram") ?? ""),
     });
   } catch (error) {
     if (error instanceof ShopError) return { ok: false, message: error.message };
     throw error;
   }
   revalidatePath("/", "layout");
+  revalidatePath("/r/[slug]", "page");
   return { ok: true, message: "Datos guardados." };
 }

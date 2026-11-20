@@ -40,7 +40,8 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 
 **El dueño**
 
-- **Registro.** Su nombre, el de la barbería, el correo y la contraseña.
+- **Registro.** Su nombre, el de la barbería, su WhatsApp, el correo y la contraseña, o con un toque en "Continuar con Google". Gratis y sin tarjeta.
+- **Plan.** Gratis: hasta 2 barberos además del dueño y 50 reservas en línea al mes (agendar a mano no cuenta). Pro: todo ilimitado, pagado por adelantado con Wompi (tarjeta, PSE, Nequi), por 1, 6 o 12 meses con descuento. Se activa cuando Wompi confirma el pago y no se renueva solo.
 - **Guía de inicio.** Al entrar, Hoy muestra cuatro pasos: armar la carta, cobrar el primer corte, sumar al equipo y completar los datos de la barbería. Se marcan solos y la guía desaparece cuando están todos, o antes si la oculta.
 - **Servicios.** Nombre, duración y precio en pesos enteros. Trae plantillas de un toque (corte clásico, fade, barba, corte + barba, infantil, cejas) y cada servicio se puede editar o desactivar.
 - **Equipo.** Cada barbero con su correo, una contraseña inicial y su porcentaje de comisión. Después puede cambiarle la comisión, que aplica desde el siguiente cobro, o ponerle una contraseña nueva si la olvidó.
@@ -51,10 +52,10 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 - **Cobrar a nombre de un barbero.** El dueño elige quién atendió; el cobro y la comisión quedan a nombre de ese barbero.
 - **Anular un cobro.** Si se cobró mal, el dueño lo anula desde Hoy con un motivo. El cobro no se borra: queda tachado en "Anulados hoy" y deja de contar en la caja, los reportes y la liquidación. Si venía de una cita, la cita vuelve a quedar por cobrar. No se puede anular con la caja de ese día cerrada ni si la comisión ya se le pagó al barbero.
 - **Caja.** El efectivo esperado contra el contado, con lo que sobra o falta, y los últimos siete cierres. Cerrada, ese día no recibe otro cobro.
-- **Mi cuenta.** Teléfono y dirección de la barbería, y el cambio de contraseña.
+- **Mi cuenta.** Teléfono, dirección, Instagram y una descripción de la barbería, que salen en la página pública, y el cambio de contraseña.
 
 - **Agenda.** El día de cada barbero con sus citas, quién reservó en línea, botón de WhatsApp y cancelar. Desde ahí también se agenda a mano.
-- **Enlace de reservas.** Cada barbería tiene su página pública (`/r/nombre-de-la-barberia`): el cliente elige servicio, barbero o "con quien esté libre", día y hora, y deja su nombre y WhatsApp. Solo ve horas libres dentro del horario, y la base de datos impide que dos citas del mismo barbero se crucen. Un mismo número puede tener máximo 3 citas pendientes.
+- **Enlace de reservas.** Cada barbería tiene su página pública (`/r/nombre-de-la-barberia`), con su descripción, dirección y botón de mapa, horario, WhatsApp e Instagram, y una vista previa con imagen al compartirla por WhatsApp. En ella el cliente elige servicio, barbero o "con quien esté libre", día y hora, y deja su nombre y WhatsApp. Solo ve horas libres dentro del horario, y la base de datos impide que dos citas del mismo barbero se crucen. Un mismo número puede tener máximo 3 citas pendientes.
 - **Horarios.** Quién recibe citas y de qué hora a qué hora trabaja cada día. Los barberos nuevos arrancan de lunes a sábado, de 9:00 a 19:00; el dueño también, si al registrarse marca que atiende.
 - **De la cita al cobro.** Cada cita pasa de reservada a confirmada, en silla y atendida. "Terminar y cobrar" abre el cobro con el servicio, el barbero y el precio de la cita; al confirmar, la cita queda atendida y no se puede cobrar dos veces. Si el dueño cobra la cita de un barbero, el cobro y la comisión quedan a nombre del barbero. "No vino" se marca cuando ya pasó la hora. El botón de WhatsApp abre un mensaje listo para confirmar la cita.
 - **Avisos por WhatsApp (sin costo).** Una lista de mensajes por enviar: el recordatorio para las citas de mañana, el de las citas de las próximas 3 horas, el "gracias por venir" con el enlace para volver a reservar, y el "hace rato no vienes" para clientes que no vuelven hace más de 3 semanas. Cada botón abre WhatsApp con el mensaje escrito y queda anotado como enviado. El dueño puede cambiar los textos. Hoy avisa cuántos hay pendientes.
@@ -70,6 +71,8 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 
 **Cualquiera**
 
+- **Instalar la app.** En el celular se agrega a la pantalla de inicio como una app, con su ícono y accesos directos a Cobrar y Agenda.
+- **Términos y política de datos.** En `/terminos` y `/privacidad` (Ley 1581 de 2012). Quien reserva autoriza el uso de su nombre y WhatsApp para gestionar la cita.
 - **Recuperar la contraseña.** Pide un enlace con su correo. El enlace dura 30 minutos, sirve una sola vez y al usarlo cierra la sesión en todos los dispositivos.
 
 ## Cómo se cuidan los datos
@@ -139,6 +142,10 @@ La app corre en cualquier sitio que sirva Next.js (Vercel, Railway, Render, un V
 | `RESEND_API_KEY` | Clave de Resend para enviar el correo de recuperación. |
 | `MAIL_FROM` | Remitente, por ejemplo `BarberAD <hola@barberad.co>`, con un dominio verificado en Resend. |
 | `PG_MAX` | Opcional: conexiones por instancia. Por defecto 3 con base remota. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Activan "Continuar con Google". Créalos en Google Cloud → Credenciales → ID de cliente OAuth (aplicación web), con la URI de redirección `<APP_URL>/auth/google/callback`. |
+| `WOMPI_PUBLIC_KEY`, `WOMPI_INTEGRITY_SECRET`, `WOMPI_EVENTS_SECRET` | Activan el pago del plan Pro. Salen del panel de Wompi → Desarrolladores. En ese mismo panel, la URL de eventos es `<APP_URL>/api/wompi`. |
+| `PLAN_PRO_PRICE` | Precio del plan Pro en pesos por mes. Por defecto 29900. Los límites del plan Gratis están en `src/server/plans.ts` y en la migración 0009. |
+| `LEGAL_NAME`, `LEGAL_ID`, `LEGAL_EMAIL`, `LEGAL_ADDRESS`, `LEGAL_CITY` | Quién responde por los datos en los Términos y la Política. Mientras falten, esas páginas muestran el dato entre corchetes. |
 
 **Lo que ya protege la app en producción**
 
@@ -146,6 +153,9 @@ La app corre en cualquier sitio que sirva Next.js (Vercel, Railway, Render, un V
 - La sesión y los enlaces viajan solo por HTTPS, y los enlaces con token no se filtran como referrer.
 
 **Lo que falta**
+
+- **Neon: pendiente.** Todavía no hay base de datos creada ni migrada en la nube; la app está lista para conectarse cuando se haga (pasos 1 y 2).
+- **Revisar los textos legales con un abogado** antes de publicar, y llenar las variables `LEGAL_*`.
 
 - Copias de seguridad: Neon guarda historial para restaurar; revisa cuántos días incluye tu plan.
 - Monitoreo de errores (por ejemplo, Sentry).
@@ -156,7 +166,6 @@ La app corre en cualquier sitio que sirva Next.js (Vercel, Railway, Render, un V
 - **Reactivar a un barbero** desactivado. Su correo queda ocupado y no se puede volver a registrar.
 - **Cobrar sin señal.** Si se va la señal, el cobro no se guarda. La clave del cobro ya permite reintentar sin duplicar; falta guardarlo en el celular y enviarlo al volver.
 - **Gastos** (arriendo, productos) para ver la utilidad neta del mes.
-- **Instalación en el celular.** El ícono es solo SVG; faltan PNG de 192 y 512 px y el ícono de Apple.
-- **Política de tratamiento de datos** (Ley 1581).
+- **Fotos** de la barbería y de los cortes en la página pública (necesita un servicio de almacenamiento de archivos).
+- **Renovación automática** del plan Pro (cobro recurrente con tarjeta guardada en Wompi).
 - Envío automático de los recordatorios con la API de WhatsApp Business (hoy los envía el barbero con un toque).
-- Planes y cobro de la suscripción.

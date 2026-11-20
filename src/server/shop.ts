@@ -125,17 +125,20 @@ export async function updateCommission(ctx: ShopContext, memberId: string, perce
   if (!rows[0]) throw new ShopError("Ese barbero no existe.");
 }
 
-export type ShopProfile = { name: string; phone: string; address: string };
+export type ShopProfile = { name: string; phone: string; address: string; about: string; instagram: string };
 
 export async function shopProfile(ctx: ShopContext) {
   const rows = await withShop(ctx, (tx) => tx<ShopProfile[]>`
-    select name, phone, address from shops where id = ${ctx.shopId}::uuid
+    select name, phone, address, about, instagram from shops where id = ${ctx.shopId}::uuid
   `);
   if (!rows[0]) throw new ShopError("No encontramos la barbería.");
   return rows[0];
 }
 
-export async function updateShopProfile(ctx: ShopContext, input: ShopProfile) {
+export async function updateShopProfile(
+  ctx: ShopContext,
+  input: Omit<ShopProfile, "about" | "instagram"> & Partial<Pick<ShopProfile, "about" | "instagram">>,
+) {
   if (ctx.role !== "owner") throw new ShopError("Solo el dueño puede editar la barbería.");
   const name = cleanName(input.name, "el nombre de la barbería");
   const phone = input.phone.trim();
@@ -144,8 +147,13 @@ export async function updateShopProfile(ctx: ShopContext, input: ShopProfile) {
     throw new ShopError("Escribe un teléfono válido, solo números.");
   }
   if (address.length > 160) throw new ShopError("La dirección es demasiado larga.");
+  const about = (input.about ?? "").trim();
+  if (about.length > 400) throw new ShopError("La descripción puede tener máximo 400 caracteres.");
+  const instagram = (input.instagram ?? "").trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//, "").replace(/\/$/, "");
+  if (!/^[A-Za-z0-9._]{0,30}$/.test(instagram)) throw new ShopError("Escribe solo tu usuario de Instagram, sin espacios.");
   await withShop(ctx, (tx) => tx`
-    update shops set name = ${name}, phone = ${phone}, address = ${address}
+    update shops set name = ${name}, phone = ${phone}, address = ${address}, about = coalesce(${input.about === undefined ? null : about}, about),
+        instagram = coalesce(${input.instagram === undefined ? null : instagram}, instagram)
     where id = ${ctx.shopId}::uuid
   `);
 }

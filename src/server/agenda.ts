@@ -73,6 +73,9 @@ export type PublicShop = {
   name: string;
   phone: string;
   address: string;
+  about: string;
+  instagram: string;
+  hours: { weekday: number; start: number; end: number }[];
   timezone: string;
   today: string;
   services: { id: string; name: string; durationMin: number; listPrice: number }[];

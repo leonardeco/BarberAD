@@ -273,6 +273,14 @@ export function Booking({ shop, slug }: { shop: PublicShop; slug: string }) {
               value={phone}
             />
           </Field>
+          <p className="text-xs text-[#94A3B8]">
+            Al reservar autorizas a {shop.name} a usar tu nombre y tu WhatsApp para gestionar esta cita y enviarte avisos sobre
+            ella, según la{" "}
+            <a className="text-[#D97706]" href="/privacidad" target="_blank">
+              política de tratamiento de datos
+            </a>
+            .
+          </p>
           {message ? <Notice tone="error">{message}</Notice> : null}
           <button
             className={buttonClass}

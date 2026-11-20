@@ -1,4 +1,4 @@
-import { slugify } from "./agenda";
+import { cleanPhone, slugify } from "./agenda";
 import { appDb } from "./db";
 import { clearAttempts, isBlocked, recordAttempt } from "./throttle";
 import { ShopError, messageFromDatabase } from "./errors";
@@ -50,17 +50,20 @@ export async function createOwnerAccount(input: {
   ownerName: string;
   shopName: string;
   takesAppointments?: boolean;
+  phone?: string;
+  googleSub?: string;
 }) {
   requirePassword(input.password);
   const email = cleanEmail(input.email);
   const ownerName = cleanName(input.ownerName, "tu nombre");
   const shopName = cleanName(input.shopName, "el nombre de la barbería");
+  const phone = input.phone?.trim() ? cleanPhone(input.phone) : "";
   try {
     const rows = await appDb()<
       { user_id: string; shop_id: string; member_id: string }[]
     >`select * from app_register_owner(
       ${email}, ${await hashPassword(input.password)}, ${ownerName}, ${shopName},
-      ${slugify(shopName)}, ${input.takesAppointments ?? false}
+      ${slugify(shopName)}, ${input.takesAppointments ?? false}, ${phone}, ${input.googleSub ?? null}
     )`;
     const row = rows[0];
     if (!row) throw new ShopError("No se pudo crear la barbería.");
@@ -219,4 +222,11 @@ export async function authenticate(email: string, password: string, ip = "local"
   const member = await membershipFor(user.user_id);
   if (!member) throw new ShopError("Tu acceso a la barbería está inactivo.");
   return toContext(user.user_id, member);
+}
+
+export async function findUserByGoogle(sub: string, email: string) {
+  const rows = await appDb()<{ app_find_user_by_google: string | null }[]>`
+    select app_find_user_by_google(${sub}, ${normalizeEmail(email)})
+  `;
+  return rows[0]?.app_find_user_by_google ?? null;
 }

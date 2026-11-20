@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BarChart3, BellRing, ChevronRight, HandCoins, Clock, Contact, Scissors, UserRound, Users } from "lucide-react";
+import { Crown, BarChart3, BellRing, ChevronRight, HandCoins, Clock, Contact, Scissors, UserRound, Users } from "lucide-react";
 import { PageTitle, cardClass } from "@/components/ui";
 import { shopSlug } from "@/server/agenda";
 import { appUrl } from "@/server/mail";
@@ -17,6 +17,7 @@ const items = [
   { href: "/servicios", label: "Servicios", detail: "Tu carta y sus precios", icon: Scissors },
   { href: "/equipo", label: "Equipo", detail: "Barberos y comisiones", icon: Users },
   { href: "/horarios", label: "Horarios", detail: "Quién atiende y cuándo", icon: Clock },
+  { href: "/plan", label: "Tu plan", detail: "Gratis o Pro, y lo que llevas usado", icon: Crown },
   { href: "/cuenta", label: "Mi cuenta", detail: "Datos de la barbería y contraseña", icon: UserRound },
 ];
 

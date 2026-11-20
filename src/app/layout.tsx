@@ -7,7 +7,10 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: { default: "BarberAD", template: "%s · BarberAD" },
   description: "Cobro de cortes, comisiones y caja para tu barbería.",
+  metadataBase: new URL((process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")),
   appleWebApp: { capable: true, title: "BarberAD", statusBarStyle: "black-translucent" },
+  icons: { apple: "/apple-touch-icon.png" },
+  openGraph: { siteName: "BarberAD", locale: "es_CO", images: [{ url: "/og.png", width: 1200, height: 630 }] },
 };
 
 export const viewport: Viewport = {
