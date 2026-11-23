@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Crown, BarChart3, BellRing, CalendarClock, HandCoins, CalendarDays, Clock, Contact, LogOut, Menu, Plus, Scissors, Users, Wallet } from "lucide-react";
+import { Crown, ShieldCheck, BarChart3, BellRing, CalendarClock, HandCoins, CalendarDays, Clock, Contact, LogOut, Menu, Plus, Scissors, Users, Wallet } from "lucide-react";
 import { endSessionAction } from "@/app/session-action";
 import { Logo, LogoMark } from "./logo";
 
@@ -36,11 +36,13 @@ function initials(name: string) {
 }
 
 export function Shell({
+  admin = false,
   shopName,
   personName,
   role,
   children,
 }: {
+  admin?: boolean;
   shopName: string;
   personName: string;
   role: "owner" | "barber";
@@ -48,6 +50,7 @@ export function Shell({
 }) {
   const pathname = usePathname();
   const items = links.filter((item) => (role === "owner" || !item.ownerOnly) && item.href !== "/mas");
+  if (admin) items.push({ href: "/admin", label: "Administrador", icon: ShieldCheck, ownerOnly: false, mobile: "none" });
   const mobileItems = links.filter((item) => item.mobile === "both" || item.mobile === role);
   const roleLabel = role === "owner" ? "Dueño" : "Barbero";
 

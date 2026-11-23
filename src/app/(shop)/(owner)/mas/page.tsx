@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Crown, BarChart3, BellRing, ChevronRight, HandCoins, Clock, Contact, Scissors, UserRound, Users } from "lucide-react";
+import { Crown, ShieldCheck, BarChart3, BellRing, ChevronRight, HandCoins, Clock, Contact, Scissors, UserRound, Users } from "lucide-react";
 import { PageTitle, cardClass } from "@/components/ui";
 import { shopSlug } from "@/server/agenda";
 import { appUrl } from "@/server/mail";
+import { adminState } from "@/server/admin";
 import { getShopContext } from "@/server/session";
 import { CopyLink } from "@/components/copy-link";
 
@@ -25,12 +26,13 @@ export default async function MorePage() {
   const ctx = await getShopContext();
   if (!ctx) redirect("/salir");
   const slug = await shopSlug(ctx);
+  const admin = (await adminState(ctx)) !== "no";
   return (
     <>
       <PageTitle title="Más" />
       {slug ? <CopyLink url={`${appUrl()}/r/${slug}`} /> : null}
       <ul className="mt-6 flex flex-col gap-2">
-        {items.map(({ href, label, detail, icon: Icon }) => (
+        {(admin ? [{ href: "/admin", label: "Administrador", detail: "Todas las barberías y sus indicadores", icon: ShieldCheck }, ...items] : items).map(({ href, label, detail, icon: Icon }) => (
           <li key={href}>
             <Link className={`${cardClass} flex min-h-16 items-center gap-3 px-4`} href={href}>
               <Icon aria-hidden="true" className="text-[#D97706]" size={20} />

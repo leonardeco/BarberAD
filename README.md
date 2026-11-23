@@ -73,7 +73,14 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 
 - **Instalar la app.** En el celular se agrega a la pantalla de inicio como una app, con su ícono y accesos directos a Cobrar y Agenda.
 - **Términos y política de datos.** En `/terminos` y `/privacidad` (Ley 1581 de 2012). Quien reserva autoriza el uso de su nombre y WhatsApp para gestionar la cita.
-- **Recuperar la contraseña.** Pide un enlace con su correo. El enlace dura 30 minutos, sirve una sola vez y al usarlo cierra la sesión en todos los dispositivos.
+- **Recuperar la contraseña.** Pide un código de 4 números a su correo. Vale 10 minutos, sirve una sola vez, se anula a los 5 intentos fallidos y al usarlo cierra la sesión en todos los dispositivos. Los enlaces de recuperación anteriores siguen funcionando.
+
+**El administrador**
+
+- **Panel de administrador** (`/admin`). Tu correo, el de `ADMIN_EMAILS`, abre un panel con todas las barberías: cuántas hay, cuántas están activas, lo cobrado y los cortes de los últimos 30 días, usuarios, plan Pro e ingresos, reservas en línea, porcentaje de citas en que el cliente no vino, y gráficas por día. Muestra también en qué paso se quedan las barberías nuevas (carta, equipo, primera reserva, primer cobro) y una lista para buscarlas, con su dueño, su plan y su actividad. No muestra clientes ni cobros individuales.
+- **Entrada con código.** Aunque tu correo coincida, el panel solo abre después de escribir un código de 4 números que llega a `ADMIN_RECOVERY_EMAIL`. Vale 8 horas por sesión. Así, si alguien se registra antes con tu correo, no consigue el panel.
+- **Tu recuperación.** El código para recuperar tu contraseña también llega a `ADMIN_RECOVERY_EMAIL`.
+- **Soporte a un dueño.** En cada barbería, "Dar código de recuperación al dueño" genera un código que ves tú; se lo das al dueño y lo escribe en "Recuperar contraseña" con su correo.
 
 ## Cómo se cuidan los datos
 
@@ -144,6 +151,8 @@ La app corre en cualquier sitio que sirva Next.js (Vercel, Railway, Render, un V
 | `PG_MAX` | Opcional: conexiones por instancia. Por defecto 3 con base remota. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Activan "Continuar con Google". Créalos en Google Cloud → Credenciales → ID de cliente OAuth (aplicación web), con la URI de redirección `<APP_URL>/auth/google/callback`. |
 | `WOMPI_PUBLIC_KEY`, `WOMPI_INTEGRITY_SECRET`, `WOMPI_EVENTS_SECRET` | Activan el pago del plan Pro. Salen del panel de Wompi → Desarrolladores. En ese mismo panel, la URL de eventos es `<APP_URL>/api/wompi`. |
+| `ADMIN_EMAILS` | Correos de administrador, separados por coma. Van en `.env.local` y en Vercel, no en el código: el repositorio es público. |
+| `ADMIN_RECOVERY_EMAIL` | Correo donde llegan los códigos del administrador. |
 | `PLAN_PRO_PRICE` | Precio del plan Pro en pesos por mes. Por defecto 29900. Los límites del plan Gratis están en `src/server/plans.ts` y en la migración 0009. |
 | `LEGAL_NAME`, `LEGAL_ID`, `LEGAL_EMAIL`, `LEGAL_ADDRESS`, `LEGAL_CITY` | Quién responde por los datos en los Términos y la Política. Mientras falten, esas páginas muestran el dato entre corchetes. |
 
