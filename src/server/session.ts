@@ -41,3 +41,11 @@ export async function endSession() {
   if (token) await deleteSession(tokenHash(token));
   jar.delete(cookieName);
 }
+
+// IP de quien hace la petición, según el proxy de la plataforma (Vercel, Railway…). En local, "local".
+export async function clientIp() {
+  const { headers } = await import("next/headers");
+  const list = await headers();
+  const forwarded = list.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || list.get("x-real-ip")?.trim() || "local";
+}

@@ -12,6 +12,8 @@ export async function chargeAction(input: {
   tip: number;
   paymentMethod: string;
   clientKey: string;
+  appointmentId?: string | null;
+  memberId?: string | null;
 }): Promise<{ ok: true; receipt: CheckoutReceipt } | { ok: false; message: string }> {
   const ctx = await getShopContext();
   if (!ctx) return { ok: false, message: "Tu sesión venció. Entra de nuevo." };
@@ -20,6 +22,7 @@ export async function chargeAction(input: {
     return { ok: true, receipt };
   } catch (error) {
     if (error instanceof ShopError) return { ok: false, message: error.message };
-    throw error;
+    console.error("[BarberAD] No se pudo guardar el cobro:", error);
+    return { ok: false, message: "No se pudo guardar el cobro. Inténtalo de nuevo; no se cobra dos veces." };
   }
 }

@@ -18,10 +18,23 @@ const methods = [
 const tipOptions = [0, 2000, 5000, 10000];
 const stepNames = ["Servicio", "Monto", "Pago"];
 
-export function CheckoutForm({ services }: { services: Service[] }) {
+type FromAppointment = { id: string; clientName: string; memberName: string; time: string };
+
+export function CheckoutForm({
+  services,
+  appointment,
+  barbers,
+  selfId,
+}: {
+  services: Service[];
+  appointment?: FromAppointment;
+  barbers?: { id: string; name: string }[];
+  selfId?: string;
+}) {
+  const [memberId, setMemberId] = useState(selfId ?? "");
   const router = useRouter();
   const [clientKey, setClientKey] = useState(() => crypto.randomUUID());
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(appointment ? 2 : 1);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const service = services.find((item) => item.id === serviceId) ?? services[0];
   const [amount, setAmount] = useState(String(service?.listPrice ?? ""));
@@ -58,6 +71,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
     setStep(1);
     setTip("0");
     setMethod("cash");
+    setMemberId(selfId ?? "");
     setReason("");
     setMessage("");
   }
@@ -65,21 +79,31 @@ export function CheckoutForm({ services }: { services: Service[] }) {
   async function confirm() {
     setPending(true);
     setMessage("");
-    const result = await chargeAction({
-      serviceId: service.id,
-      amount: parsedAmount,
-      reason,
-      tip: tip === "" ? 0 : Number(tip),
-      paymentMethod: method,
-      clientKey,
-    });
-    setPending(false);
-    if (!result.ok) {
-      setMessage(result.message);
-      return;
+    try {
+      const result = await chargeAction({
+        serviceId: service.id,
+        amount: parsedAmount,
+        reason,
+        tip: tip === "" ? 0 : Number(tip),
+        paymentMethod: method,
+        clientKey,
+        appointmentId: appointment?.id ?? null,
+        memberId: appointment ? null : memberId || null,
+      });
+      if (!result.ok) {
+        setMessage(result.message);
+        return;
+      }
+      setReceipt(result.receipt);
+      // Recargar esta página con una cita ya cobrada la mandaría a la agenda y se perdería el recibo.
+      if (!appointment) router.refresh();
+    } catch {
+      // Sin señal el celular no llega al servidor. La misma clave de cobro se reenvía al
+      // reintentar, así que si el primer intento sí llegó no se cobra dos veces.
+      setMessage("No hay conexión con el servidor. Revisa la señal y toca Confirmar cobro otra vez: no se cobra dos veces.");
+    } finally {
+      setPending(false);
     }
-    setReceipt(result.receipt);
-    router.refresh();
   }
 
   if (receipt) {
@@ -101,9 +125,15 @@ export function CheckoutForm({ services }: { services: Service[] }) {
           </div>
         </dl>
         <div className="mt-6 flex flex-col gap-2">
-          <button className={buttonClass} onClick={startOver} type="button">
-            Cobrar otro corte
-          </button>
+          {appointment ? (
+            <button className={buttonClass} onClick={() => router.push("/agenda")} type="button">
+              Volver a la agenda
+            </button>
+          ) : (
+            <button className={buttonClass} onClick={startOver} type="button">
+              Cobrar otro corte
+            </button>
+          )}
           <button className={`${quietButtonClass} w-full`} onClick={() => router.push("/hoy")} type="button">
             Ver el día
           </button>
@@ -115,7 +145,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
-        {step > 1 ? (
+        {step > (appointment ? 2 : 1) ? (
           <button
             aria-label="Volver"
             className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-white/10 text-[#CBD5E1]"
@@ -161,6 +191,11 @@ export function CheckoutForm({ services }: { services: Service[] }) {
       {step === 2 ? (
         <div className="flex flex-col gap-4">
           <div className={`${cardClass} p-4`}>
+            {appointment ? (
+              <p className="mb-1 text-sm text-[#BFDBFE]">
+                Cita de las {appointment.time} · {appointment.clientName} con {appointment.memberName}
+              </p>
+            ) : null}
             <p className="font-medium">{service.name}</p>
             <p className="text-sm text-[#94A3B8]">Precio de lista {formatCop(service.listPrice)}</p>
           </div>
@@ -170,6 +205,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
               autoFocus
               className={`${inputClass} h-14 text-2xl font-semibold tabular-nums`}
               inputMode="numeric"
+              maxLength={8}
               onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))}
               value={amount}
             />
@@ -185,6 +221,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
               </span>
               <input
                 className={inputClass}
+                maxLength={120}
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="Ej.: cliente frecuente"
                 value={reason}
@@ -199,6 +236,26 @@ export function CheckoutForm({ services }: { services: Service[] }) {
 
       {step === 3 ? (
         <div className="flex flex-col gap-5">
+          {!appointment && barbers && barbers.length > 1 ? (
+            <div>
+              <p className="mb-2 text-sm text-[#CBD5E1]">¿Quién lo atendió?</p>
+              <div className="flex flex-wrap gap-2">
+                {barbers.map((item) => (
+                  <button
+                    key={item.id}
+                    aria-pressed={memberId === item.id}
+                    className={`h-11 cursor-pointer rounded-xl border px-4 text-sm ${
+                      memberId === item.id ? "border-[#D97706] bg-[#D97706] font-semibold text-[#0F172A]" : "border-white/10 text-[#CBD5E1]"
+                    }`}
+                    onClick={() => setMemberId(item.id)}
+                    type="button"
+                  >
+                    {item.id === selfId ? `${item.name} (yo)` : item.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div>
             <p className="mb-2 text-sm text-[#CBD5E1]">¿Cómo pagó?</p>
             <div className="grid grid-cols-3 gap-2">
@@ -247,6 +304,7 @@ export function CheckoutForm({ services }: { services: Service[] }) {
               aria-label="Otra propina"
               className={`${inputClass} mt-2 tabular-nums`}
               inputMode="numeric"
+              maxLength={8}
               onChange={(event) => setTip(event.target.value.replace(/\D/g, ""))}
               placeholder="Otro valor"
               value={tipOptions.includes(Number(tip)) ? "" : tip}

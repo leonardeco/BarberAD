@@ -3,8 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
 import { required } from "./env";
-import { adminUrl } from "./database-url";
-import { createDatabase, ensureLocalPostgres } from "./local-postgres";
+import { adminUrl, connectionOptions, remoteAdminUrl } from "./database-url";
 
 function quoteLiteral(value: string) {
   return `'${value.replace(/'/g, "''")}'`;
@@ -25,10 +24,23 @@ async function ensureRole(sql: ReturnType<typeof postgres>) {
   `);
 }
 
+function quoteIdent(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 export async function migrate(database: "barberad" | "barberad_test", options?: { fresh?: boolean }) {
-  await ensureLocalPostgres();
-  await createDatabase(database);
-  const sql = postgres(adminUrl(database), { max: 1, onnotice: () => undefined });
+  const remote = remoteAdminUrl();
+  if (remote) {
+    if (options?.fresh) throw new Error("No se borra una base remota desde aquí.");
+  } else {
+    // El Postgres embebido solo hace falta en local; en producción ni se carga.
+    const { createDatabase, ensureLocalPostgres } = await import("./local-postgres");
+    await ensureLocalPostgres();
+    await createDatabase(database);
+  }
+  const url = adminUrl(database);
+  const dbName = remote ? decodeURIComponent(new URL(remote).pathname.slice(1)) : database;
+  const sql = postgres(url, { max: 1, prepare: connectionOptions(url).prepare, onnotice: () => undefined });
   try {
     await ensureRole(sql);
     if (options?.fresh) {
@@ -41,12 +53,13 @@ export async function migrate(database: "barberad" | "barberad_test", options?: 
       const id = name.slice(0, 4);
       const done = await sql`select 1 from schema_migrations where id = ${id}`;
       if (done.length > 0) continue;
+      console.info(`[BarberAD] Aplicando ${name}`);
       await sql.begin(async (tx) => {
         await tx.unsafe(fs.readFileSync(path.join(dir, name), "utf8"));
         await tx`insert into schema_migrations (id) values (${id})`;
       });
     }
-    await sql.unsafe(`grant connect on database ${database} to barberad_app`);
+    await sql.unsafe(`grant connect on database ${quoteIdent(dbName)} to barberad_app`);
     await sql.unsafe("grant usage on schema public to barberad_app");
   } finally {
     await sql.end({ timeout: 2 });

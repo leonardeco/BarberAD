@@ -1,10 +1,14 @@
 {
   "name": "barberad",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx src/server/dev.ts",
     "db:migrate": "tsx src/server/migrate.ts",
-    "test": "tsx --test --test-force-exit src/server/checkout.integration.test.ts",
+    "test": "tsx --test --test-concurrency=1 --test-force-exit src/server/*.test.ts",
+    "typecheck": "tsc --noEmit",
     "build": "next build",
     "start": "next start"
   },

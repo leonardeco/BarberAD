@@ -54,6 +54,18 @@ export function ProfileForm({ profile }: { profile: ShopProfile }) {
           placeholder="Calle 10 # 5-20, Bogotá"
         />
       </Field>
+      <Field label="Instagram" hint="Solo tu usuario. Sale en tu página de reservas.">
+        <input className={inputClass} defaultValue={profile.instagram} maxLength={40} name="instagram" placeholder="@labarberia" />
+      </Field>
+      <Field label="Sobre tu barbería" hint="Una o dos frases para tus clientes. Máximo 400 caracteres.">
+        <textarea
+          className={`${inputClass} h-auto min-h-24 py-3`}
+          defaultValue={profile.about}
+          maxLength={400}
+          name="about"
+          placeholder="Cortes clásicos y fades desde 2015, con cerveza fría mientras esperas."
+        />
+      </Field>
       {state?.message ? <Notice tone={state.ok ? "ok" : "error"}>{state.message}</Notice> : null}
       <button className={buttonClass} disabled={pending} type="submit">
         {pending ? "Guardando…" : "Guardar datos"}
