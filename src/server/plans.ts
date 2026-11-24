@@ -3,8 +3,8 @@ export const FREE_LIMITS = { barbers: 2, onlineBookingsPerMonth: 50 };
 
 // Precio del plan Pro en pesos por mes. Se puede cambiar sin tocar código con PLAN_PRO_PRICE.
 export function proPrice() {
-  const value = Number(process.env.PLAN_PRO_PRICE ?? 29900);
-  return Number.isInteger(value) && value > 0 ? value : 29900;
+  const value = Number(process.env.PLAN_PRO_PRICE ?? 20000);
+  return Number.isInteger(value) && value > 0 ? value : 20000;
 }
 
 export const proOptions = [

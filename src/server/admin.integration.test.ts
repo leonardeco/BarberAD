@@ -37,6 +37,7 @@ test("códigos de 4 dígitos y panel de administrador", async () => {
     const auth = await import("./auth.ts");
     const shop = await import("./shop.ts");
     const codes = await import("./codes.ts");
+    const billing = await import("./billing.ts");
     const { appDb } = await import("./db.ts");
     const postgres = (await import("postgres")).default;
 
@@ -155,6 +156,39 @@ test("códigos de 4 dígitos y panel de administrador", async () => {
       assert.match(supportCode, /^\d{4}$/);
       await codes.resetWithCode("dueno@barberia.test", supportCode, "clave-por-soporte-1", "10.10.10.10");
       await auth.authenticate("dueno@barberia.test", "clave-por-soporte-1");
+
+      // ----- Cortesía: regalar plan Pro -----
+      const grant = (hash: string, shopId: string, months: number, note = "") =>
+        appDb()<{ app_admin_grant_pro: Date }[]>`select app_admin_grant_pro(${hash}, ${shopId}::uuid, ${months}, ${note}, ${boss.userId}::uuid)`;
+      await assert.rejects(() => grant("hash-dueno", dueno.shopId, 1), /forbidden/, "un dueño no se regala plan");
+      await assert.rejects(() => grant("hash-jefe", dueno.shopId, 0), /invalid_months/);
+      await assert.rejects(() => grant("hash-jefe", dueno.shopId, 25), /invalid_months/);
+      await assert.rejects(() => grant("hash-jefe", crypto.randomUUID(), 1), /shop_not_found/);
+      assert.equal((await billing.planStatus(dueno)).pro, false);
+      const [{ app_admin_grant_pro: first }] = await grant("hash-jefe", dueno.shopId, 3, "piloto");
+      const [{ app_admin_grant_pro: second }] = await grant("hash-jefe", dueno.shopId, 1);
+      const days = (second.getTime() - first.getTime()) / 86_400_000;
+      assert.ok(days > 27 && days < 32, "el segundo regalo se suma al tiempo que ya tenía");
+      assert.equal((await billing.planStatus(dueno)).pro, true);
+      const grants = await appDb()<{ grants: number; months: number }[]>`select grants, months from app_admin_grants('hash-jefe') where shop_id = ${dueno.shopId}::uuid`;
+      assert.deepEqual(grants[0], { grants: 2, months: 4 });
+      await assert.rejects(() => appDb()`select * from app_admin_grants('hash-dueno')`, /forbidden/);
+      const note = await admin`select note from plan_grants order by created_at limit 1`;
+      assert.equal(note[0].note, "piloto");
+      // Con Pro, el dueño ya puede sumar más de 2 barberos.
+      for (const n of [1, 2, 3]) {
+        await auth.addBarberAccount(dueno, { email: `b${n}@barberia.test`, password: "clave-segura", displayName: `Barbero ${n}`, commissionPercent: 40 });
+      }
+
+      // Una barbería de cortesía: dueño nuevo, Pro regalado y código para que cree su contraseña.
+      const nuevo = await auth.createOwnerAccount({
+        email: "nuevo@barberia.test", password: "aleatoria-larga-no-conocida", ownerName: "Nico", shopName: "Cortesía", phone: "3105556677", takesAppointments: true,
+      });
+      await grant("hash-jefe", nuevo.shopId, 6, "Cuenta de cortesía");
+      const courtesyCode = await codes.issueOwnerResetCode(nuevo.userId);
+      await codes.resetWithCode("nuevo@barberia.test", courtesyCode, "mi-propia-clave-1", "11.11.11.11");
+      await auth.authenticate("nuevo@barberia.test", "mi-propia-clave-1");
+      assert.equal((await billing.planStatus(nuevo)).pro, true);
 
       // Verificación vencida: deja de abrir el panel.
       await admin`update sessions set admin_verified_until = now() - interval '1 minute' where token_hash = 'hash-jefe'`;

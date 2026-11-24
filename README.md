@@ -41,7 +41,7 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 **El dueño**
 
 - **Registro.** Su nombre, el de la barbería, su WhatsApp, el correo y la contraseña, o con un toque en "Continuar con Google". Gratis y sin tarjeta.
-- **Plan.** Gratis: hasta 2 barberos además del dueño y 50 reservas en línea al mes (agendar a mano no cuenta). Pro: todo ilimitado, pagado por adelantado con Wompi (tarjeta, PSE, Nequi), por 1, 6 o 12 meses con descuento. Se activa cuando Wompi confirma el pago y no se renueva solo.
+- **Plan.** Gratis: hasta 2 barberos además del dueño y 50 reservas en línea al mes (agendar a mano no cuenta). Pro: todo ilimitado, **$20.000 al mes**, pagado por adelantado con Wompi (tarjeta, PSE, Nequi): 1 mes $20.000, 6 meses $108.000 (10% menos) o 12 meses $192.000 (20% menos). Se activa cuando Wompi confirma el pago y no se renueva solo.
 - **Guía de inicio.** Al entrar, Hoy muestra cuatro pasos: armar la carta, cobrar el primer corte, sumar al equipo y completar los datos de la barbería. Se marcan solos y la guía desaparece cuando están todos, o antes si la oculta.
 - **Servicios.** Nombre, duración y precio en pesos enteros. Trae plantillas de un toque (corte clásico, fade, barba, corte + barba, infantil, cejas) y cada servicio se puede editar o desactivar.
 - **Equipo.** Cada barbero con su correo, una contraseña inicial y su porcentaje de comisión. Después puede cambiarle la comisión, que aplica desde el siguiente cobro, o ponerle una contraseña nueva si la olvidó.
@@ -80,6 +80,7 @@ Entra por http://localhost:3000/registro. La contraseña pide al menos 8 caracte
 - **Panel de administrador** (`/admin`). Tu correo, el de `ADMIN_EMAILS`, abre un panel con todas las barberías: cuántas hay, cuántas están activas, lo cobrado y los cortes de los últimos 30 días, usuarios, plan Pro e ingresos, reservas en línea, porcentaje de citas en que el cliente no vino, y gráficas por día. Muestra también en qué paso se quedan las barberías nuevas (carta, equipo, primera reserva, primer cobro) y una lista para buscarlas, con su dueño, su plan y su actividad. No muestra clientes ni cobros individuales.
 - **Entrada con código.** Aunque tu correo coincida, el panel solo abre después de escribir un código de 4 números que llega a `ADMIN_RECOVERY_EMAIL`. Vale 8 horas por sesión. Así, si alguien se registra antes con tu correo, no consigue el panel.
 - **Tu recuperación.** El código para recuperar tu contraseña también llega a `ADMIN_RECOVERY_EMAIL`.
+- **Cortesía.** "Agregar una barbería de cortesía" crea la cuenta del dueño y su barbería con el plan Pro regalado por 1, 3, 6 o 12 meses; ves un código de 4 números que le das al dueño para que cree su propia contraseña desde "Recuperar contraseña". En cada barbería, "Regalar plan Pro" suma meses al tiempo que le quede. Cada regalo queda anotado con su motivo, y en la lista aparece como "cortesía".
 - **Soporte a un dueño.** En cada barbería, "Dar código de recuperación al dueño" genera un código que ves tú; se lo das al dueño y lo escribe en "Recuperar contraseña" con su correo.
 
 ## Cómo se cuidan los datos
@@ -153,7 +154,7 @@ La app corre en cualquier sitio que sirva Next.js (Vercel, Railway, Render, un V
 | `WOMPI_PUBLIC_KEY`, `WOMPI_INTEGRITY_SECRET`, `WOMPI_EVENTS_SECRET` | Activan el pago del plan Pro. Salen del panel de Wompi → Desarrolladores. En ese mismo panel, la URL de eventos es `<APP_URL>/api/wompi`. |
 | `ADMIN_EMAILS` | Correos de administrador, separados por coma. Van en `.env.local` y en Vercel, no en el código: el repositorio es público. |
 | `ADMIN_RECOVERY_EMAIL` | Correo donde llegan los códigos del administrador. |
-| `PLAN_PRO_PRICE` | Precio del plan Pro en pesos por mes. Por defecto 29900. Los límites del plan Gratis están en `src/server/plans.ts` y en la migración 0009. |
+| `PLAN_PRO_PRICE` | Precio del plan Pro en pesos por mes. Por defecto 20000; los descuentos de 6 y 12 meses se calculan solos sobre ese valor. Los límites del plan Gratis están en `src/server/plans.ts` y en la migración 0009. |
 | `LEGAL_NAME`, `LEGAL_ID`, `LEGAL_EMAIL`, `LEGAL_ADDRESS`, `LEGAL_CITY` | Quién responde por los datos en los Términos y la Política. Mientras falten, esas páginas muestran el dato entre corchetes. |
 
 **Lo que ya protege la app en producción**

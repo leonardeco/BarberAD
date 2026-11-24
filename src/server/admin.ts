@@ -1,6 +1,9 @@
 import { appDb } from "./db";
 import { ShopError } from "./errors";
-import { isAdminEmail } from "./codes";
+import { isAdminEmail, issueOwnerResetCode } from "./codes";
+import { createOwnerAccount } from "./auth";
+import { randomBytes } from "node:crypto";
+import { cleanName } from "./validation";
 import { currentSessionHash } from "./session";
 import type { ShopContext } from "./types";
 
@@ -60,17 +63,69 @@ export type AdminShop = {
   charged30: number;
   online30: number;
   lastActivity: string | null;
+  grants: number;
+  grantedMonths: number;
 };
 
 export async function adminShops(query: string) {
   const hash = await requireHash();
-  return appDb()<AdminShop[]>`
-    select shop_id as "shopId", name, slug, phone, to_char(created_at at time zone 'America/Bogota', 'YYYY-MM-DD') as "createdAt",
-           owner_name as "ownerName", owner_email as "ownerEmail", pro, to_char(plan_until at time zone 'America/Bogota', 'YYYY-MM-DD') as "planUntil",
-           barbers, cuts30, charged30, online30,
-           to_char(last_activity at time zone 'America/Bogota', 'YYYY-MM-DD') as "lastActivity"
-    from app_admin_shops(${hash}, ${query.trim().slice(0, 60)})
+  const [shops, grants] = await Promise.all([
+    appDb()<Omit<AdminShop, "grants" | "grantedMonths">[]>`
+      select shop_id as "shopId", name, slug, phone, to_char(created_at at time zone 'America/Bogota', 'YYYY-MM-DD') as "createdAt",
+             owner_name as "ownerName", owner_email as "ownerEmail", pro, to_char(plan_until at time zone 'America/Bogota', 'YYYY-MM-DD') as "planUntil",
+             barbers, cuts30, charged30, online30,
+             to_char(last_activity at time zone 'America/Bogota', 'YYYY-MM-DD') as "lastActivity"
+      from app_admin_shops(${hash}, ${query.trim().slice(0, 60)})
+    `,
+    appDb()<{ shop_id: string; grants: number; months: number }[]>`select * from app_admin_grants(${hash})`,
+  ]);
+  const byShop = new Map(grants.map((row) => [row.shop_id, row]));
+  return shops.map((shop) => ({ ...shop, grants: byShop.get(shop.shopId)?.grants ?? 0, grantedMonths: byShop.get(shop.shopId)?.months ?? 0 }));
+}
+
+export const COURTESY_MONTHS = [1, 3, 6, 12] as const;
+
+function checkMonths(months: number) {
+  if (!Number.isInteger(months) || months < 1 || months > 24) throw new ShopError("Los meses de cortesía van de 1 a 24.");
+  return months;
+}
+
+async function grant(shopId: string, months: number, note: string, adminUserId: string) {
+  const hash = await requireHash();
+  const rows = await appDb()<{ app_admin_grant_pro: Date }[]>`
+    select app_admin_grant_pro(${hash}, ${shopId}::uuid, ${months}, ${note.trim().slice(0, 200)}, ${adminUserId}::uuid)
   `;
+  return rows[0].app_admin_grant_pro;
+}
+
+// Regala meses de plan Pro a una barbería que ya existe. Se suman al tiempo que le quede.
+export async function grantPro(ctx: ShopContext, shopId: string, months: number, note: string) {
+  if ((await adminState(ctx)) !== "ok") throw new ShopError("Verifica tu código de administrador primero.");
+  const until = await grant(shopId, checkMonths(months), note, ctx.userId);
+  return until.toISOString().slice(0, 10);
+}
+
+// Crea la barbería y la cuenta del dueño, con Pro de cortesía. El dueño entra con un código de 4 números
+// (el mismo de "Recuperar contraseña") para crear su propia contraseña.
+export async function createCourtesyShop(
+  ctx: ShopContext,
+  input: { ownerName: string; shopName: string; email: string; phone: string; months: number; note: string },
+) {
+  if ((await adminState(ctx)) !== "ok") throw new ShopError("Verifica tu código de administrador primero.");
+  const months = checkMonths(input.months);
+  cleanName(input.ownerName, "el nombre del dueño");
+  const owner = await createOwnerAccount({
+    ownerName: input.ownerName,
+    shopName: input.shopName,
+    email: input.email,
+    phone: input.phone,
+    takesAppointments: true,
+    // Contraseña al azar que nadie conoce: el dueño crea la suya con el código.
+    password: randomBytes(32).toString("base64url"),
+  });
+  const until = await grant(owner.shopId, months, input.note || "Cuenta de cortesía", ctx.userId);
+  const code = await issueOwnerResetCode(owner.userId);
+  return { email: input.email.trim().toLowerCase(), code, until: until.toISOString().slice(0, 10) };
 }
 
 export async function adminOwnerOf(shopId: string) {
