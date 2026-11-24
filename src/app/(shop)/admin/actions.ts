@@ -1,7 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { adminOwnerOf, adminState, userEmail } from "@/server/admin";
+import { adminOwnerOf, adminState, createCourtesyShop, grantPro, userEmail } from "@/server/admin";
 import { issueOwnerResetCode, sendAdminCode, verifyAdminCode } from "@/server/codes";
 import { ShopError } from "@/server/errors";
 import { clientIp, currentSessionHash, getShopContext } from "@/server/session";
@@ -48,6 +49,49 @@ export async function ownerResetCodeAction(_prev: OwnerCodeState, formData: Form
     return { ok: true, code, message: `Código para ${owner.email}. Vale 10 minutos.` };
   } catch (error) {
     if (error instanceof ShopError) return { ok: false, message: error.message };
+    throw error;
+  }
+}
+
+export type GrantState = { ok: boolean; message: string } | null;
+
+export async function grantProAction(_prev: GrantState, formData: FormData): Promise<GrantState> {
+  const ctx = await getShopContext();
+  if (!ctx) return { ok: false, message: "Tu sesión venció. Entra de nuevo." };
+  try {
+    const until = await grantPro(ctx, String(formData.get("shopId") ?? ""), Number(formData.get("months")), String(formData.get("note") ?? ""));
+    revalidatePath("/admin");
+    return { ok: true, message: `Listo: Pro de cortesía hasta el ${until}.` };
+  } catch (error) {
+    if (error instanceof ShopError) return { ok: false, message: error.message };
+    throw error;
+  }
+}
+
+export type CourtesyState = {
+  ok: boolean;
+  message: string;
+  email?: string;
+  code?: string;
+  values?: { ownerName: string; shopName: string; email: string; phone: string; note: string };
+} | null;
+
+export async function createCourtesyShopAction(_prev: CourtesyState, formData: FormData): Promise<CourtesyState> {
+  const ctx = await getShopContext();
+  const values = {
+    ownerName: String(formData.get("ownerName") ?? ""),
+    shopName: String(formData.get("shopName") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    phone: String(formData.get("phone") ?? ""),
+    note: String(formData.get("note") ?? ""),
+  };
+  if (!ctx) return { ok: false, message: "Tu sesión venció. Entra de nuevo.", values };
+  try {
+    const result = await createCourtesyShop(ctx, { ...values, months: Number(formData.get("months")) });
+    revalidatePath("/admin");
+    return { ok: true, message: `Barbería creada con Pro de cortesía hasta el ${result.until}.`, email: result.email, code: result.code };
+  } catch (error) {
+    if (error instanceof ShopError) return { ok: false, message: error.message, values };
     throw error;
   }
 }

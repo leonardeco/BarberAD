@@ -5,6 +5,7 @@ import { adminOverview, adminShops, adminState } from "@/server/admin";
 import { dayLabel } from "@/server/agenda";
 import { formatCop } from "@/server/money";
 import { getShopContext } from "@/server/session";
+import { CourtesyShop, GrantPro } from "./courtesy";
 import { OwnerCode } from "./owner-code";
 
 export const metadata = { title: "Administrador" };
@@ -97,6 +98,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </ul>
       </section>
 
+      <CourtesyShop />
+
       <section className="mt-8">
         <h2 className="text-lg font-semibold">Barberías</h2>
         <form className="mt-3 flex gap-2" role="search">
@@ -123,7 +126,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       shop.pro ? "bg-[#D97706]/20 text-[#FBBF24]" : "bg-white/10 text-[#CBD5E1]"
                     }`}
                   >
-                    {shop.pro ? `Pro hasta ${shop.planUntil}` : "Gratis"}
+                    {shop.pro ? `Pro hasta ${shop.planUntil}` : "Gratis"}{shop.grants ? " · cortesía" : ""}
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-[#94A3B8]">
@@ -143,6 +146,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       <a className={`${quietButtonClass} h-10 text-xs`} href={`https://wa.me/${shop.phone.replace(/\D/g, "")}`} rel="noreferrer" target="_blank">
                         Escribirle por WhatsApp
                       </a>
+                    ) : null}
+                    <GrantPro shopId={shop.shopId} />
+                    {shop.grants ? (
+                      <p className="text-xs text-[#94A3B8]">
+                        Ya le regalaste {shop.grantedMonths === 1 ? "1 mes" : `${shop.grantedMonths} meses`} en {shop.grants === 1 ? "1 vez" : `${shop.grants} veces`}.
+                      </p>
                     ) : null}
                     <OwnerCode shopId={shop.shopId} />
                   </div>
